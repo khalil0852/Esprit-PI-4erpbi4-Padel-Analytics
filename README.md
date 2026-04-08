@@ -5,7 +5,8 @@
 
 ![Power BI](https://img.shields.io/badge/Power%20BI-F2C811?style=for-the-badge&logo=powerbi&logoColor=black)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![SQL Server](https://img.shields.io/badge/SQL%20Server-CC2927?style=for-the-badge&logo=microsoftsqlserver&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![Talend](https://img.shields.io/badge/Talend-FF6D70?style=for-the-badge&logo=talend&logoColor=white)
 
 ---
 
@@ -101,15 +102,44 @@ Bookmark-based navigation with role buttons on the home page. Each role sees onl
 
 ## 🔄 Data Pipeline
 
-- **Source:** SQL Server (local)
+- **Source:** Web scraping & APIs (Premier Padel data)
+- **ETL:** Talend Open Studio (Extract, Transform, Load)
+- **Data Warehouse:** PostgreSQL (local)
+- **Visualization:** Power BI Desktop
 - **Refresh:** Automated via Power Automate Desktop + Windows Task Scheduler (every hour)
 - **Model:** Star schema with dimension and fact tables
 
 ```
-dim_player ──┐
-dim_brand  ──┼──► fact_match
-dim_date   ──┘    fact_tournament_match
-                  fact_player
+                    ┌─────────────┐
+                    │   Sources   │
+                    │ (Web / API) │
+                    └──────┬──────┘
+                           │
+                    ┌──────▼──────┐
+                    │   Talend    │
+                    │  (ETL)      │
+                    └──────┬──────┘
+                           │
+                    ┌──────▼──────┐
+                    │ PostgreSQL  │
+                    │  (DWH)      │
+                    └──────┬──────┘
+                           │
+              ┌────────────┼────────────┐
+              ▼            ▼            ▼
+        dim_player    dim_brand    dim_date
+              │            │            │
+              └────────┬───┘────────────┘
+                       ▼
+              fact_match
+              fact_tournament_match
+              fact_player
+                       │
+                       ▼
+              ┌────────────────┐
+              │   Power BI     │
+              │  (Dashboard)   │
+              └────────────────┘
 ```
 
 ---
@@ -118,7 +148,8 @@ dim_date   ──┘    fact_tournament_match
 
 ### Prerequisites
 - Power BI Desktop
-- SQL Server (local)
+- PostgreSQL
+- Talend Open Studio
 - Python 3.x with packages:
   ```
   pip install pandas scikit-learn matplotlib
@@ -129,10 +160,11 @@ dim_date   ──┘    fact_tournament_match
    ```bash
    git clone https://github.com/khalil0852/Esprit-PI-4erpbi4-Padel-Analytics.git
    ```
-2. Open `official_dashboard.pbix` in Power BI Desktop
-3. Update the SQL Server connection in **Home → Transform Data → Data Source Settings**
-4. Configure Python path in **File → Options → Python Scripting**
-5. Click **Refresh** to load the latest data
+2. Import Talend jobs to load data into PostgreSQL
+3. Open `official_dashboard.pbix` in Power BI Desktop
+4. Update the PostgreSQL connection in **Home → Transform Data → Data Source Settings**
+5. Configure Python path in **File → Options → Python Scripting**
+6. Click **Refresh** to load the latest data
 
 ---
 
@@ -154,10 +186,11 @@ dim_date   ──┘    fact_tournament_match
 
 | Tool | Usage |
 |------|-------|
+| Talend Open Studio | ETL — Extract, Transform, Load |
+| PostgreSQL | Data Warehouse |
 | Power BI Desktop | Dashboard & visualizations |
 | DAX | Measures, KPIs, RLS |
 | Python | ML clustering (K-Means) |
-| SQL Server | Data storage |
 | Power Automate Desktop | Automated refresh |
 | Git / GitHub | Version control |
 
