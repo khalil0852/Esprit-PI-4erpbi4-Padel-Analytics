@@ -1,0 +1,11 @@
+Gradient Boosting
+Best params: {'clf__learning_rate': 0.05, 'clf__max_depth': 6, 'clf__n_estimators': 200}
+
+              precision    recall  f1-score   support
+
+        Loss       0.85      0.85      0.85       414
+         Win       0.85      0.85      0.85       413
+
+    accuracy                           0.85       827
+   macro avg       0.85      0.85      0.85       827
+weighted avg       0.85      0.85      0.85       827

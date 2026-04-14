@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Equipment Recommendation — Padel Analytics{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Equipment Recommendation</h1>
+    <p>Content-based system recommends gear by matching your profile to the 12 equipped pro players</p>
+</div>
+
+<div class="form-row">
+    <div class="search-box" style="flex:1">
+        <input type="text" id="player-input" placeholder="Search for a player..." autocomplete="off">
+        <div class="dropdown" id="player-dropdown"></div>
+    </div>
+    <select id="type-select">
+        <option value="all">All Equipment</option>
+        <option value="racket">Rackets</option>
+        <option value="Chaussures">Shoes</option>
+        <option value="T-shirt">T-shirts</option>
+    </select>
+    <button class="btn" id="rec-btn" onclick="recommend()" disabled>Recommend</button>
+    <div class="spinner" id="spinner"></div>
+</div>
+
+<div class="result-panel" id="result">
+    <div class="result-header">
+        <h2 id="result-player"></h2>
+        <span class="tag" id="result-segment"></span>
+    </div>
+
+    <div style="margin-bottom:1.5rem;">
+        <div style="font-size:0.8rem; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.75rem;">Most Similar Pro Players</div>
+        <div id="similar-pros" style="display:flex; flex-wrap:wrap; gap:0.5rem;"></div>
+    </div>
+
+    <div>
+        <div style="font-size:0.8rem; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.75rem;">Recommended Equipment</div>
+        <div id="recommendations"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedPlayer = null;
+initSearch('player-input', 'player-dropdown', (name) => {
+    selectedPlayer = name;
+    document.getElementById('rec-btn').disabled = false;
+});
+
+function recommend() {
+    if (!selectedPlayer) return;
+    const btn = document.getElementById('rec-btn');
+    const spinner = document.getElementById('spinner');
+    btn.disabled = true; spinner.classList.add('show');
+
+    fetch('/api/recommend', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            player_name: selectedPlayer,
+            type: document.getElementById('type-select').value
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) { alert(data.error); return; }
+
+        document.getElementById('result-player').textContent = data.player;
+        const seg = document.getElementById('result-segment');
+        seg.textContent = data.segment;
+        seg.className = 'tag tag-' + data.segment.toLowerCase();
+
+        // Similar pros
+        let prosHtml = '';
+        data.similar_pros.forEach(p => {
+            prosHtml += `
+                <div class="pro-badge">
+                    <span style="font-weight:700">${p.pro_name}</span>
+                    <span class="sim">${(p.similarity * 100).toFixed(0)}% match</span>
+                    <span class="tag tag-${(p.segment||'').toLowerCase()}" style="font-size:0.65rem">${p.segment}</span>
+                </div>
+            `;
+        });
+        document.getElementById('similar-pros').innerHTML = prosHtml;
+
+        // Recommendations
+        let recHtml = '';
+        if (data.recommendations.length === 0) {
+            recHtml = '<div style="color:var(--text2); padding:1rem;">No equipment found for this filter. Try "All Equipment".</div>';
+        }
+        data.recommendations.forEach((r, i) => {
+            const typeColors = {
+                'racket': 'var(--warn)', 'Chaussures': 'var(--accent2)',
+                'T-shirt': 'var(--gold)', 'Short': 'var(--accent)'
+            };
+            const color = typeColors[r.type_produit] || 'var(--text2)';
+            recHtml += `
+                <div class="rec-item">
+                    <div>
+                        <div class="rec-name">${r.product_name}</div>
+                        <div class="rec-meta">
+                            <span style="color:${color}">${r.type_produit}</span> · ${r.brand} · used by <strong>${r.player_name}</strong>
+                        </div>
+                    </div>
+                    <div class="rec-price">€${r.price.toFixed(0)}</div>
+                </div>
+            `;
+        });
+        document.getElementById('recommendations').innerHTML = recHtml;
+        document.getElementById('result').classList.add('show');
+
+        // Update type filter with available types
+        if (data.equip_types) {
+            const sel = document.getElementById('type-select');
+            const current = sel.value;
+            sel.innerHTML = '<option value="all">All Equipment</option>';
+            data.equip_types.forEach(t => {
+                sel.innerHTML += `<option value="${t}" ${t===current?'selected':''}>${t}</option>`;
+            });
+        }
+    })
+    .finally(() => { btn.disabled = false; spinner.classList.remove('show'); });
+}
+</script>
+{% endblock %}

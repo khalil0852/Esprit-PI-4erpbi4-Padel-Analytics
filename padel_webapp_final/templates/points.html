@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Points Forecast — Padel Analytics{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Points Forecast</h1>
+    <p>Regression models predict ranking points (Ridge · Lasso · XGBoost)</p>
+</div>
+
+<div class="form-row">
+    <div class="search-box" style="flex:1">
+        <input type="text" id="player-input" placeholder="Search for a player..." autocomplete="off">
+        <div class="dropdown" id="player-dropdown"></div>
+    </div>
+    <button class="btn" id="predict-btn" onclick="predict()" disabled>Forecast</button>
+    <div class="spinner" id="spinner"></div>
+</div>
+
+<div class="result-panel" id="result">
+    <div class="result-header">
+        <h2 id="result-player"></h2>
+    </div>
+    <div class="player-info" id="player-info"></div>
+    <div class="grid grid-3" id="model-results" style="margin-bottom:1.5rem"></div>
+    <div id="bar-chart" style="display:flex; align-items:end; gap:1.5rem; height:200px; padding:1rem 0; border-top:1px solid var(--border); margin-top:1rem;"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedPlayer = null;
+initSearch('player-input', 'player-dropdown', (name) => {
+    selectedPlayer = name;
+    document.getElementById('predict-btn').disabled = false;
+});
+
+function predict() {
+    if (!selectedPlayer) return;
+    const btn = document.getElementById('predict-btn');
+    const spinner = document.getElementById('spinner');
+    btn.disabled = true; spinner.classList.add('show');
+
+    fetch('/api/points', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ player_name: selectedPlayer })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) { alert(data.error); return; }
+
+        document.getElementById('result-player').textContent = data.player;
+        document.getElementById('player-info').innerHTML = `
+            <div class="info-item"><span>Actual Points</span><span style="color:var(--gold)">${data.actual_points.toLocaleString()}</span></div>
+            <div class="info-item"><span>Rank</span><span>#${data.position}</span></div>
+            <div class="info-item"><span>Matches</span><span>${data.total_matches}</span></div>
+            <div class="info-item"><span>Win Rate</span><span>${data.win_rate}%</span></div>
+        `;
+
+        let html = '';
+        for (const [model, pred] of Object.entries(data.predictions)) {
+            const diff = pred - data.actual_points;
+            const diffStr = diff >= 0 ? `+${diff.toLocaleString()}` : diff.toLocaleString();
+            const diffColor = Math.abs(diff) < data.actual_points * 0.2 ? 'var(--accent)' : 'var(--warn)';
+            html += `
+                <div class="model-card">
+                    <div class="model-name">${model}</div>
+                    <div class="prob" style="color:var(--accent2)">${pred.toLocaleString()}</div>
+                    <div style="font-size:0.85rem; color:${diffColor}; margin-top:0.25rem">${diffStr} pts</div>
+                </div>
+            `;
+        }
+        document.getElementById('model-results').innerHTML = html;
+
+        // Bar chart
+        const all = {...data.predictions, 'Actual': data.actual_points};
+        const maxVal = Math.max(...Object.values(all));
+        let barHtml = '';
+        const colors = {'Ridge': '#118ab2', 'Lasso': '#06d6a0', 'XGBoost': '#ef476f', 'Actual': '#ffd166'};
+        for (const [name, val] of Object.entries(all)) {
+            const h = Math.max((val / maxVal) * 180, 4);
+            barHtml += `
+                <div style="flex:1; text-align:center;">
+                    <div style="font-family:'Space Mono',monospace; font-size:0.75rem; margin-bottom:0.5rem; color:var(--text2)">${val.toLocaleString()}</div>
+                    <div style="height:${h}px; background:${colors[name]}; border-radius:6px 6px 0 0; margin:0 auto; width:60%;"></div>
+                    <div style="font-size:0.8rem; margin-top:0.5rem; font-weight:700; color:${colors[name]}">${name}</div>
+                </div>
+            `;
+        }
+        document.getElementById('bar-chart').innerHTML = barHtml;
+        document.getElementById('result').classList.add('show');
+    })
+    .finally(() => { btn.disabled = false; spinner.classList.remove('show'); });
+}
+</script>
+{% endblock %}

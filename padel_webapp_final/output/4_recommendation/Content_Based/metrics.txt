@@ -1,0 +1,2 @@
+Brand Hit Rate: 4/12 = 33.3%
+Type Hit Rate: 12/12 = 100.0%

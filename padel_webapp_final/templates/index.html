@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Padel Analytics{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Dashboard</h1>
+    <p>Padel player analytics powered by machine learning — 2023–2025 data</p>
+</div>
+
+<div class="grid grid-4" style="margin-bottom:2rem">
+    <div class="card">
+        <h3>Total Players</h3>
+        <div class="value">{{ "{:,}".format(total_players) }}</div>
+        <div class="sub">across 111 countries</div>
+    </div>
+    <div class="card">
+        <h3>Matches Analyzed</h3>
+        <div class="value">{{ "{:,}".format(total_matches) }}</div>
+        <div class="sub">{{ total_tournaments }} tournaments</div>
+    </div>
+    <div class="card">
+        <h3>ML Models</h3>
+        <div class="value">14</div>
+        <div class="sub">trained & deployed</div>
+    </div>
+    <div class="card">
+        <h3>Segments</h3>
+        <div class="value">4</div>
+        <div class="sub">player profiles</div>
+    </div>
+</div>
+
+<div class="grid grid-4" style="margin-bottom:2.5rem">
+    {% for seg, count in segment_stats.items() %}
+    <div class="card" style="text-align:center;">
+        <span class="tag tag-{{ seg|lower }}">{{ seg }}</span>
+        <div style="font-family:'Space Mono',monospace; font-size:1.75rem; font-weight:700; margin:0.5rem 0;">{{ "{:,}".format(count) }}</div>
+        <div class="sub">players</div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="card" style="margin-bottom:2rem">
+    <h3 style="margin-bottom:1rem">Top 10 Players by Points</h3>
+    <table>
+        <thead>
+            <tr><th>#</th><th>Player</th><th>Country</th><th>Points</th><th>Rank</th><th>Segment</th></tr>
+        </thead>
+        <tbody>
+            {% for p in top_players %}
+            <tr>
+                <td style="color:var(--text2)">{{ loop.index }}</td>
+                <td style="font-weight:700">{{ p.player_name }}</td>
+                <td>{{ p.country }}</td>
+                <td style="font-family:'Space Mono',monospace; color:var(--accent)">{{ "{:,}".format(p.points) }}</td>
+                <td style="font-family:'Space Mono',monospace">#{{ p.position }}</td>
+                <td><span class="tag tag-{{ p.segment|lower }}">{{ p.segment }}</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="grid grid-3">
+    <a href="/predict" class="card" style="text-decoration:none; cursor:pointer; border-color:var(--accent2);">
+        <h3 style="color:var(--accent2)">Win Prediction</h3>
+        <p style="color:var(--text); font-size:0.95rem; margin-top:0.5rem;">Predict match outcomes using Random Forest, Gradient Boosting & XGBoost</p>
+    </a>
+    <a href="/points" class="card" style="text-decoration:none; cursor:pointer; border-color:var(--gold);">
+        <h3 style="color:var(--gold)">Points Forecast</h3>
+        <p style="color:var(--text); font-size:0.95rem; margin-top:0.5rem;">Estimate player ranking points with Ridge, Lasso & XGBoost regression</p>
+    </a>
+    <a href="/recommend" class="card" style="text-decoration:none; cursor:pointer; border-color:var(--warn);">
+        <h3 style="color:var(--warn)">Equipment Rec</h3>
+        <p style="color:var(--text); font-size:0.95rem; margin-top:0.5rem;">Get gear recommendations based on pro player profile similarity</p>
+    </a>
+</div>
+{% endblock %}

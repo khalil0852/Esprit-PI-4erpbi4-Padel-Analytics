@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Talent Scout — Padel Analytics{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Talent Scout</h1>
+    <p>Isolation Forest anomaly detection identifies players who outperform their ranking expectations</p>
+</div>
+
+<div class="form-row">
+    <div class="search-box" style="flex:1">
+        <input type="text" id="player-input" placeholder="Check if a player is an emerging talent..." autocomplete="off">
+        <div class="dropdown" id="player-dropdown"></div>
+    </div>
+    <button class="btn" id="check-btn" onclick="checkTalent()" disabled>Analyze</button>
+    <div class="spinner" id="spinner"></div>
+</div>
+
+<div class="result-panel" id="result" style="margin-bottom:2rem">
+    <div style="display:flex; align-items:center; gap:2rem; flex-wrap:wrap;">
+        <div>
+            <span style="color:var(--text2); font-size:0.85rem;">Player</span>
+            <div style="font-weight:700; font-size:1.2rem;" id="res-name"></div>
+        </div>
+        <div>
+            <span style="color:var(--text2); font-size:0.85rem;">Verdict</span>
+            <div id="res-verdict"></div>
+        </div>
+        <div>
+            <span style="color:var(--text2); font-size:0.85rem;">Anomaly Score</span>
+            <div style="font-family:'Space Mono',monospace; font-size:1.2rem;" id="res-score"></div>
+        </div>
+        <div>
+            <span style="color:var(--text2); font-size:0.85rem;">Overperformance</span>
+            <div style="font-family:'Space Mono',monospace; font-size:1.2rem;" id="res-overperf"></div>
+        </div>
+        <div>
+            <span style="color:var(--text2); font-size:0.85rem;">Win Rate</span>
+            <div style="font-family:'Space Mono',monospace; font-size:1.2rem;" id="res-wr"></div>
+        </div>
+        <div>
+            <span style="color:var(--text2); font-size:0.85rem;">Rank</span>
+            <div style="font-family:'Space Mono',monospace; font-size:1.2rem;" id="res-rank"></div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h3 style="margin-bottom:1rem">Detected Emerging Talents <span style="color:var(--accent); font-size:0.85rem;">({{ talents|length }} players)</span></h3>
+    <p style="color:var(--text2); font-size:0.85rem; margin-bottom:1rem;">
+        {{ total_anomalies }} anomalies detected · Showing overperformers with 3+ matches
+    </p>
+    {% if talents %}
+    <table>
+        <thead>
+            <tr>
+                <th>Player</th>
+                <th>Country</th>
+                <th>Rank</th>
+                <th>Points</th>
+                <th>Win Rate</th>
+                <th>Matches</th>
+                <th>Overperformance</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in talents %}
+            <tr>
+                <td style="font-weight:700">{{ t.player_name }}</td>
+                <td>{{ t.country }}</td>
+                <td style="font-family:'Space Mono',monospace">#{{ t.position|int }}</td>
+                <td style="font-family:'Space Mono',monospace">{{ "{:,}".format(t.points|int) }}</td>
+                <td style="font-family:'Space Mono',monospace; color:var(--accent)">{{ "%.1f"|format(t.win_rate * 100) }}%</td>
+                <td style="font-family:'Space Mono',monospace">{{ t.total_matches|int }}</td>
+                <td style="font-family:'Space Mono',monospace; color:var(--gold)">+{{ "%.2f"|format(t.overperformance) }}</td>
+                <td><span class="talent-badge talent-yes">★ Emerging</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color:var(--text2)">No emerging talents detected with current parameters.</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedPlayer = null;
+initSearch('player-input', 'player-dropdown', (name) => {
+    selectedPlayer = name;
+    document.getElementById('check-btn').disabled = false;
+});
+
+function checkTalent() {
+    if (!selectedPlayer) return;
+    document.getElementById('spinner').classList.add('show');
+
+    fetch('/api/check-talent', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ player_name: selectedPlayer })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) { alert(data.error); return; }
+        document.getElementById('res-name').textContent = data.player;
+
+        const verdict = document.getElementById('res-verdict');
+        if (data.is_emerging_talent) {
+            verdict.innerHTML = '<span class="talent-badge talent-yes" style="font-size:1rem; padding:0.3rem 1rem;">★ Emerging Talent</span>';
+        } else if (data.is_anomaly) {
+            verdict.innerHTML = '<span class="talent-badge" style="font-size:1rem; padding:0.3rem 1rem; background:#ef476f20; color:var(--warn);">Anomaly (underperformer)</span>';
+        } else {
+            verdict.innerHTML = '<span class="talent-badge talent-no" style="font-size:1rem; padding:0.3rem 1rem;">Normal Profile</span>';
+        }
+
+        document.getElementById('res-score').textContent = data.anomaly_score;
+        const op = data.overperformance;
+        const opEl = document.getElementById('res-overperf');
+        opEl.textContent = (op >= 0 ? '+' : '') + op.toFixed(4);
+        opEl.style.color = op > 0 ? 'var(--accent)' : 'var(--warn)';
+        document.getElementById('res-wr').textContent = data.win_rate + '%';
+        document.getElementById('res-rank').textContent = '#' + data.position;
+        document.getElementById('result').classList.add('show');
+    })
+    .finally(() => document.getElementById('spinner').classList.remove('show'));
+}
+</script>
+{% endblock %}

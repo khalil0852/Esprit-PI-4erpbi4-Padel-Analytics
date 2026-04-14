@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Player Segments — Padel Analytics{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Player Segmentation</h1>
+    <p>K-Means clustering segments 4,319 players into 4 profiles based on ranking, performance & popularity</p>
+</div>
+
+<div class="form-row">
+    <div class="search-box" style="flex:1">
+        <input type="text" id="player-input" placeholder="Which segment does a player belong to?" autocomplete="off">
+        <div class="dropdown" id="player-dropdown"></div>
+    </div>
+    <button class="btn" id="check-btn" onclick="checkSegment()" disabled>Find Segment</button>
+    <div class="spinner" id="spinner"></div>
+</div>
+
+<div class="result-panel" id="result" style="margin-bottom:2rem">
+    <div style="display:flex; align-items:center; gap:1.5rem;">
+        <div>
+            <span style="color:var(--text2); font-size:0.85rem;">Player</span>
+            <div style="font-weight:700; font-size:1.2rem;" id="res-name"></div>
+        </div>
+        <div>
+            <span style="color:var(--text2); font-size:0.85rem;">Segment</span>
+            <div><span class="tag" id="res-segment" style="font-size:1rem; padding:0.3rem 1rem;"></span></div>
+        </div>
+        <div>
+            <span style="color:var(--text2); font-size:0.85rem;">Rank</span>
+            <div style="font-family:'Space Mono',monospace; font-size:1.2rem;" id="res-rank"></div>
+        </div>
+        <div>
+            <span style="color:var(--text2); font-size:0.85rem;">Points</span>
+            <div style="font-family:'Space Mono',monospace; font-size:1.2rem; color:var(--accent)" id="res-points"></div>
+        </div>
+        <div>
+            <span style="color:var(--text2); font-size:0.85rem;">Win Rate</span>
+            <div style="font-family:'Space Mono',monospace; font-size:1.2rem;" id="res-wr"></div>
+        </div>
+    </div>
+</div>
+
+<div class="grid grid-2">
+    {% for seg_name, seg in segments.items() %}
+    <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <span class="tag tag-{{ seg_name|lower }}" style="font-size:0.9rem; padding:0.3rem 1rem;">{{ seg_name }}</span>
+            <span style="font-family:'Space Mono',monospace; font-size:1.5rem; font-weight:700;">{{ "{:,}".format(seg.count) }}</span>
+        </div>
+        <div style="display:flex; gap:1.5rem; margin-bottom:1rem; font-size:0.85rem;">
+            <div><span style="color:var(--text2)">Avg Points</span><br><strong>{{ "{:,.0f}".format(seg.avg_points) }}</strong></div>
+            <div><span style="color:var(--text2)">Avg Rank</span><br><strong>#{{ "{:,.0f}".format(seg.avg_position) }}</strong></div>
+            <div><span style="color:var(--text2)">Win Rate</span><br><strong>{{ seg.avg_win_rate }}%</strong></div>
+        </div>
+        {% if seg.top_players %}
+        <div style="font-size:0.8rem; color:var(--text2); margin-bottom:0.5rem;">TOP PLAYERS</div>
+        {% for p in seg.top_players %}
+        <div style="display:flex; justify-content:space-between; padding:0.35rem 0; border-bottom:1px solid var(--border); font-size:0.9rem;">
+            <span>{{ p.player_name }}</span>
+            <span style="color:var(--text2)">{{ p.country }} · {{ "{:,}".format(p.points) }} pts</span>
+        </div>
+        {% endfor %}
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedPlayer = null;
+initSearch('player-input', 'player-dropdown', (name) => {
+    selectedPlayer = name;
+    document.getElementById('check-btn').disabled = false;
+});
+
+function checkSegment() {
+    if (!selectedPlayer) return;
+    document.getElementById('spinner').classList.add('show');
+    fetch('/api/segment-player', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ player_name: selectedPlayer })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) { alert(data.error); return; }
+        document.getElementById('res-name').textContent = data.player;
+        const seg = document.getElementById('res-segment');
+        seg.textContent = data.segment;
+        seg.className = 'tag tag-' + data.segment.toLowerCase();
+        document.getElementById('res-rank').textContent = '#' + data.position;
+        document.getElementById('res-points').textContent = data.points.toLocaleString();
+        document.getElementById('res-wr').textContent = data.win_rate + '%';
+        document.getElementById('result').classList.add('show');
+    })
+    .finally(() => document.getElementById('spinner').classList.remove('show'));
+}
+</script>
+{% endblock %}
