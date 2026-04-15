@@ -42,6 +42,7 @@ reg_lasso = joblib.load(os.path.join(MODEL_DIR, "regressor_lasso.pkl"))
 reg_xgb = joblib.load(os.path.join(MODEL_DIR, "regressor_xgboost.pkl"))
 
 kmeans = joblib.load(os.path.join(MODEL_DIR, "kmeans.pkl"))
+gmm = joblib.load(os.path.join(MODEL_DIR, "gmm.pkl"))
 iso_forest = joblib.load(os.path.join(MODEL_DIR, "iso_forest.pkl"))
 
 scaler_cluster = joblib.load(os.path.join(MODEL_DIR, "scaler_cluster.pkl"))
@@ -62,6 +63,66 @@ fact_match = pd.read_csv(os.path.join(DATA_DIR, "fact_match.csv"))
 fact_player = pd.read_csv(os.path.join(DATA_DIR, "fact_player.csv"))
 fact_equip = pd.read_csv(os.path.join(DATA_DIR, "fact_equipement.csv"))
 dim_player = pd.read_csv(os.path.join(DATA_DIR, "dim_player.csv"))
+
+# ─── Name fixes (encoding mismatches between CSVs) ──────────────────
+_alvaro = fact_player[fact_player['player_name'].str.contains('lvaro Melendez', na=False)].sort_values('points', ascending=False)
+_alvaro_name = _alvaro.iloc[0]['player_name'] if len(_alvaro) > 0 else None
+
+NAME_MAP = {
+    "Federico Mouri\u00f1o": "Federico Mouri\u00c3\u00b1o",
+    "Ignacio Vilari\u00f1o Gestoso": "Ignacio Vilari\u00c3\u00b1o Gestoso",
+    "Valentino Libaak": "Valentino Gabriel Libaak",
+    "Leandro Roman Augsburguer": "Leandro Augsburger",
+    "Maximiliano Sanchez Aguero": "Maximiliano Sanchez",
+    "Agustin Gomez Silingo": "Agustin Silingo",
+    "Pablo Lij\u00f3": "Pablo Lijo",
+    "Agust\u00edn Torre": "Eduardo Agustin Torre",
+    "Manuel Casta\u00f1o Salguero": "Manuel Casta\u00c3\u00b1o Salguero",
+    "Jes\u00fas Moya Sos": "Jesus Moya Sos",
+    "Francisco Miguel Ramirez Navas": "Fran Ramirez Navas",
+    "Renzo Gabriel Nu\u00f1ez": "Renzo Gabriel Nu\u00c3\u00b1ez",
+    "Diego Arredondo Garc\u00eda": "Diego Arredondo Garcia",
+    "Diego Garc\u00eda": "Diego Garcia",
+    "Juan Manuel Arga\u00f1aras": "Juan Manuel Arga\u00c3\u00b1aras",
+    "Pau Mi\u00f1ano Ortinez": "Pau Mi\u00c3\u00b1ano Ortinez",
+    "Nacho Moragues Molt\u00f2": "Nacho Moragues Molt\u00c3\u00b2",
+    "Pablo Marqu\u00e9s Gonzalez": "Pablo Marqu\u00c3\u00a9s Gonzalez",
+    "Martin Sanchez Pi\u00f1eiro": "Mart\u00c3\u00adn S\u00c3\u00a1nchez Pi\u00c3\u00b1eiro",
+    "Pyry Hyrkk\u00f6nen": "Pyry Hyrkk\u00c3\u00b6nen",
+    "Sebastian Mu\u00f1oz Campos": "Sebastian Mu\u00c3\u00b1oz Campos",
+    "Rayyan Al Jufairi": "Rayan Abdulla Aljufairi",
+    "Khalid Saadon al-Kuwari": "Khalid Saadon Alkuwari",
+    "Aimar Go\u00f1i Lacabe": "Aimar Go\u00c3\u00b1i Lacabe",
+}
+if _alvaro_name:
+    NAME_MAP["\u00c1lvaro Melendez Amaya"] = _alvaro_name
+    NAME_MAP["\u00c1lvaro M\u00e9lendez Amaya"] = _alvaro_name
+
+DROP_PLAYERS = [
+    "Abdulaziz Saadon Alkuwari", "Amr Hassan", "Andres Devletian",
+    "Carlos Zarhi", "Diego Gonzalez Almedo", "Eduardo Andres Lopez Figuera",
+    "Juan Martin Diaz Martinez", "Manuel Yuste Apolinar", "Mohammed Abdulla",
+    "Roberto Alonso Rodriguez", "Santiago Frugoni"
+]
+
+for col in ['team_a_player1','team_a_player2','team_b_player1','team_b_player2']:
+    fact_match[col] = fact_match[col].replace(NAME_MAP)
+fact_match['team_a_key'] = fact_match['team_a_player1'] + ' / ' + fact_match['team_a_player2']
+fact_match['team_b_key'] = fact_match['team_b_player1'] + ' / ' + fact_match['team_b_player2']
+for _, row in fact_match.iterrows():
+    if row['winner_team'] not in [row['team_a_key'], row['team_b_key']]:
+        a_players = {row['team_a_player1'], row['team_a_player2']}
+        for p in a_players:
+            if p in str(row['winner_team']) or any(orig in str(row['winner_team']) for orig, new in NAME_MAP.items() if new == p):
+                fact_match.at[_, 'winner_team'] = row['team_a_key']
+                break
+        else:
+            fact_match.at[_, 'winner_team'] = row['team_b_key']
+
+all_drop = set(DROP_PLAYERS)
+mask = ~(fact_match['team_a_player1'].isin(all_drop) | fact_match['team_a_player2'].isin(all_drop) |
+         fact_match['team_b_player1'].isin(all_drop) | fact_match['team_b_player2'].isin(all_drop))
+fact_match = fact_match[mask].reset_index(drop=True)
 
 # Parse social media
 social_cols = ['instagram_followers', 'youtube_subscribers',
@@ -98,6 +159,7 @@ for _, row in fact_match.iterrows():
         for p in players:
             records.append({
                 'player_name': p, 'tournament': row['tournament_name'],
+                'match_date': row['match_date'],
                 'year': row['source_year'], 'round': row['round'],
                 'team_key': key, 'won': won, 'is_3set': row['is_3set'],
                 'games_won': gw, 'games_lost': gl,
@@ -201,8 +263,16 @@ cluster_features = ['points', 'position', 'total_matches', 'total_wins',
                     'clutch_rate', 'trajectory_slope']
 X_cl = df_all[cluster_features].fillna(0)
 X_cl_scaled = scaler_cluster.transform(X_cl)
-df_all['cluster'] = kmeans.predict(X_cl_scaled)
 
+# All 3 clustering models
+df_all['cluster_kmeans'] = kmeans.predict(X_cl_scaled)
+df_all['cluster_gmm'] = gmm.predict(X_cl_scaled)
+from sklearn.cluster import AgglomerativeClustering
+hier_model = AgglomerativeClustering(n_clusters=4)
+df_all['cluster_hier'] = hier_model.fit_predict(X_cl_scaled)
+
+# Label K-Means segments (primary)
+df_all['cluster'] = df_all['cluster_kmeans']
 profile = df_all.groupby('cluster')[cluster_features].mean()
 cluster_rank = profile['points'].sort_values(ascending=False).index.tolist()
 labels = ['Stars', 'Contenders', 'Regulars', 'Newcomers']
@@ -211,7 +281,19 @@ for i, c in enumerate(cluster_rank):
     label_map[c] = labels[i] if i < len(labels) else f'Group_{i}'
 df_all['segment'] = df_all['cluster'].map(label_map)
 
-# Anomaly detection
+# Label GMM segments
+profile_gmm = df_all.groupby('cluster_gmm')[cluster_features].mean()
+gmm_rank = profile_gmm['points'].sort_values(ascending=False).index.tolist()
+gmm_map = {c: labels[i] if i < len(labels) else f'Group_{i}' for i, c in enumerate(gmm_rank)}
+df_all['segment_gmm'] = df_all['cluster_gmm'].map(gmm_map)
+
+# Label Hierarchical segments
+profile_hier = df_all.groupby('cluster_hier')[cluster_features].mean()
+hier_rank = profile_hier['points'].sort_values(ascending=False).index.tolist()
+hier_map = {c: labels[i] if i < len(labels) else f'Group_{i}' for i, c in enumerate(hier_rank)}
+df_all['segment_hier'] = df_all['cluster_hier'].map(hier_map)
+
+# Anomaly detection — both Isolation Forest AND LOF
 anomaly_features = ['win_rate', 'position', 'total_matches', 'game_diff',
                     'clutch_rate', 'trajectory_slope', 'avg_dominance']
 df_match_only = df_all[df_all['total_matches'] > 0].copy()
@@ -219,6 +301,140 @@ if len(df_match_only) > 0:
     df_match_only['expected_win_rate'] = 1 - (df_match_only['position'] / df_match_only['position'].max())
     df_match_only['overperformance'] = df_match_only['win_rate'] - df_match_only['expected_win_rate']
     df_match_only['points_per_match'] = df_match_only['points'] / df_match_only['total_matches'].clip(1)
+
+    # Pre-compute both anomaly models
+    anom_feat_full = ['win_rate', 'position', 'overperformance', 'points_per_match',
+                      'total_matches', 'game_diff', 'clutch_rate', 'trajectory_slope', 'avg_dominance']
+    X_anom = df_match_only[anom_feat_full].fillna(0)
+    X_anom_scaled = scaler_anomaly.transform(X_anom)
+    df_match_only['anomaly_iso'] = iso_forest.predict(X_anom_scaled)
+    df_match_only['score_iso'] = iso_forest.score_samples(X_anom_scaled)
+
+    from sklearn.neighbors import LocalOutlierFactor
+    lof_model = LocalOutlierFactor(n_neighbors=20, contamination=0.1)
+    df_match_only['anomaly_lof'] = lof_model.fit_predict(X_anom_scaled)
+
+# Time Series — prepare QUARTERLY data with rich features for all players
+ts_quarterly = None
+ts_eligible = []
+try:
+    player_matches['match_date'] = pd.to_datetime(player_matches['match_date'], utc=True)
+    player_matches['quarter'] = player_matches['match_date'].dt.to_period('Q')
+    player_matches['round_num'] = player_matches['round'].map(round_order).fillna(1)
+    dm_tourn = pd.read_csv(os.path.join(DATA_DIR, "dim_tournament.csv"))
+    cat_map = dict(zip(dm_tourn['tournament_name'], dm_tourn['category']))
+    player_matches['category'] = player_matches['tournament'].map(cat_map).fillna('P2')
+    cat_weight = {'Major': 3, 'P1': 2, 'P2': 1}
+    player_matches['cat_w'] = player_matches['category'].map(cat_weight).fillna(1)
+    player_matches['weighted_win'] = player_matches['won'] * player_matches['cat_w']
+    player_matches['is_late_round'] = (player_matches['round_num'] >= 5).astype(int)
+    ts_quarterly = player_matches.groupby(['player_name', 'quarter']).agg(
+        win_rate=('won', 'mean'), matches=('won', 'count'),
+        avg_round=('round_num', 'mean'), max_round=('round_num', 'max'),
+        weighted_wins=('weighted_win', 'sum'), total_cat_w=('cat_w', 'sum'),
+        avg_dominance=('dominance', 'mean'), late_round_rate=('is_late_round', 'mean'),
+    ).reset_index()
+    ts_quarterly['weighted_wr'] = ts_quarterly['weighted_wins'] / ts_quarterly['total_cat_w'].clip(1)
+    q_counts = ts_quarterly.groupby('player_name')['quarter'].count()
+    ts_eligible = sorted(q_counts[q_counts >= 6].index.tolist())
+    print(f"[✓] Time series (quarterly): {len(ts_eligible)} players with 6+ quarters")
+except Exception as e:
+    print(f"[!] Time series skipped: {e}")
+
+
+def compute_forecast(player_name, n_future=2):
+    """Compute ARIMA + Prophet quarterly forecast for any player."""
+    if ts_quarterly is None:
+        return None
+    pq = ts_quarterly[ts_quarterly['player_name'] == player_name].copy()
+    if len(pq) < 4:
+        return {'error': f'{player_name} has only {len(pq)} quarters (need 4+)'}
+    pq['date'] = pq['quarter'].dt.to_timestamp()
+    pq = pq.sort_values('date')
+    target = pq.set_index('date')['win_rate']
+    n_test = max(2, len(target) // 4)
+    train_ts, test_ts = target.iloc[:-n_test], target.iloc[-n_test:]
+
+    from pandas.tseries.offsets import QuarterBegin
+    future_dates = pd.date_range(start=target.index[-1] + QuarterBegin(1), periods=n_future, freq='QS')
+    future_labels = [f"{d.year} Q{(d.month-1)//3+1}" for d in future_dates]
+
+    history = []
+    for _, row in pq.iterrows():
+        history.append({'quarter': str(row['quarter']), 'win_rate': round(float(row['win_rate'])*100,1),
+            'matches': int(row['matches']), 'max_round': int(row['max_round']),
+            'weighted_wr': round(float(row['weighted_wr'])*100,1),
+            'avg_dominance': round(float(row['avg_dominance']),3),
+            'late_round_pct': round(float(row['late_round_rate'])*100,1)})
+
+    result = {'player': player_name, 'n_quarters': len(target), 'n_test': n_test,
+              'n_future': n_future, 'last_quarter': str(pq['quarter'].iloc[-1]),
+              'history': history, 'test_start': str(pq['quarter'].iloc[-n_test]), 'models': {}}
+
+    from sklearn.metrics import mean_absolute_error, mean_squared_error
+    import warnings as _w; _w.filterwarnings('ignore')
+
+    actual_test = {str(pq['quarter'].iloc[-n_test+i]): round(float(test_ts.iloc[i])*100,1) for i in range(n_test)}
+
+    # ─── ARIMA ───
+    try:
+        from statsmodels.tsa.arima.model import ARIMA as ARIMAModel
+        best_aic, best_ord, best_fit = np.inf, (0,0,0), None
+        for p in range(3):
+            for d in range(2):
+                for q in range(3):
+                    try:
+                        fit = ARIMAModel(train_ts.values, order=(p,d,q)).fit()
+                        if fit.aic < best_aic: best_aic, best_ord, best_fit = fit.aic, (p,d,q), fit
+                    except: pass
+        eval_fc = best_fit.forecast(steps=n_test) if best_fit else np.full(n_test, train_ts.mean())
+        eval_preds = {str(pq['quarter'].iloc[-n_test+i]): round(float(np.clip(eval_fc[i],0,1))*100,1) for i in range(n_test)}
+
+        best_aic2, best_fit2 = np.inf, None
+        for p in range(3):
+            for d in range(2):
+                for q in range(3):
+                    try:
+                        fit = ARIMAModel(target.values, order=(p,d,q)).fit()
+                        if fit.aic < best_aic2: best_aic2, best_fit2 = fit.aic, fit
+                    except: pass
+        fut_fc = best_fit2.forecast(steps=n_future) if best_fit2 else np.full(n_future, target.mean())
+        fut_fc = np.clip(fut_fc, 0, 1)
+        future_preds = {fl: round(float(fut_fc[i])*100,1) for i, fl in enumerate(future_labels)}
+
+        mae = round(float(mean_absolute_error(test_ts, np.clip(eval_fc,0,1))), 4)
+        rmse = round(float(np.sqrt(mean_squared_error(test_ts, np.clip(eval_fc,0,1)))), 4)
+        result['models']['ARIMA'] = {'order': str(best_ord), 'eval_predictions': eval_preds,
+            'actual_test': actual_test, 'future_predictions': future_preds,
+            'mae': mae, 'rmse': rmse, 'mae_pct': round(mae*100,1)}
+    except Exception as e:
+        result['models']['ARIMA'] = {'error': str(e)}
+
+    # ─── Prophet ───
+    try:
+        from prophet import Prophet as ProphetModel
+        prop_df = pd.DataFrame({'ds': target.index, 'y': target.values})
+
+        m_eval = ProphetModel(yearly_seasonality=False, weekly_seasonality=False, daily_seasonality=False)
+        m_eval.fit(prop_df.iloc[:-n_test])
+        fc_ev = m_eval.predict(m_eval.make_future_dataframe(periods=n_test, freq='QS'))
+        ev_pred = np.clip(fc_ev.tail(n_test)['yhat'].values, 0, 1)
+        eval_preds_p = {str(pq['quarter'].iloc[-n_test+i]): round(float(ev_pred[i])*100,1) for i in range(n_test)}
+
+        m_full = ProphetModel(yearly_seasonality=False, weekly_seasonality=False, daily_seasonality=False)
+        m_full.fit(prop_df)
+        fc_fu = m_full.predict(m_full.make_future_dataframe(periods=n_future, freq='QS'))
+        fu_pred = np.clip(fc_fu.tail(n_future)['yhat'].values, 0, 1)
+        future_preds_p = {fl: round(float(fu_pred[i])*100,1) for i, fl in enumerate(future_labels)}
+
+        mae = round(float(mean_absolute_error(test_ts, ev_pred)), 4)
+        rmse = round(float(np.sqrt(mean_squared_error(test_ts, ev_pred))), 4)
+        result['models']['Prophet'] = {'eval_predictions': eval_preds_p, 'actual_test': actual_test,
+            'future_predictions': future_preds_p, 'mae': mae, 'rmse': rmse, 'mae_pct': round(mae*100,1)}
+    except Exception as e:
+        result['models']['Prophet'] = {'error': str(e)}
+
+    return result
 
 # Pro profiles for recommendation
 equip_players = fact_equip['player_name'].unique()
@@ -233,13 +449,11 @@ pro_profiles = pro_profiles.merge(pro_equip, on='player_name', how='left')
 rec_features = ['points', 'position', 'total_matches', 'total_wins',
                 'win_rate', 'game_diff', 'gender_enc', 'log_social', 'clutch_rate']
 
-# Player lists for dropdowns
 # Player lists for dropdowns — only players who played matches
 player_list = sorted(df_all[df_all['total_matches'] > 0]['player_name'].tolist())
 country_list = sorted(df_all['country'].dropna().unique().tolist())
 gender_list = ['homme', 'femme']
 
-# Segment stats for dashboard
 # Display stats — only players with matches
 df_display = df_all[df_all['total_matches'] > 0]
 segment_stats = df_display['segment'].value_counts().to_dict()
@@ -525,12 +739,16 @@ def api_segment_player():
     p = player.iloc[0]
     return jsonify({
         'player': player_name,
-        'segment': p['segment'],
-        'cluster': int(p['cluster']),
+        'models': {
+            'K-Means': str(p.get('segment', 'N/A')),
+            'GMM': str(p.get('segment_gmm', 'N/A')),
+            'Hierarchical': str(p.get('segment_hier', 'N/A'))
+        },
+        'segment': str(p['segment']),
         'points': int(p['points']),
         'position': int(p['position']),
         'win_rate': round(float(p['win_rate']) * 100, 1),
-        'country': p['country']
+        'country': str(p['country'])
     })
 
 
@@ -596,29 +814,36 @@ def api_recommend():
 @app.route('/talent')
 def talent_page():
     if len(df_match_only) == 0:
-        return render_template('talent.html', talents=[], total_anomalies=0)
+        return render_template('talent.html', talents=[], total_anomalies_iso=0, total_anomalies_lof=0)
 
-    anom_feat = ['win_rate', 'position', 'overperformance',
-                 'points_per_match', 'total_matches', 'game_diff',
-                 'clutch_rate', 'trajectory_slope', 'avg_dominance']
-    X_a = df_match_only[anom_feat].fillna(0)
-    X_a_scaled = scaler_anomaly.transform(X_a)
-    df_match_only['anomaly'] = iso_forest.predict(X_a_scaled)
-    df_match_only['anomaly_score'] = iso_forest.score_samples(X_a_scaled)
-
-    emerging = df_match_only[
-        (df_match_only['anomaly'] == -1) &
+    emerging_iso = df_match_only[
+        (df_match_only['anomaly_iso'] == -1) &
         (df_match_only['overperformance'] > 0) &
         (df_match_only['total_matches'] >= 3)
     ].sort_values('overperformance', ascending=False)
 
-    talents = emerging[['player_name', 'country', 'position', 'points',
-                        'win_rate', 'total_matches', 'overperformance',
-                        'anomaly_score']].head(20).to_dict('records')
+    emerging_lof = df_match_only[
+        (df_match_only['anomaly_lof'] == -1) &
+        (df_match_only['overperformance'] > 0) &
+        (df_match_only['total_matches'] >= 3)
+    ].sort_values('overperformance', ascending=False)
 
-    total_anomalies = (df_match_only['anomaly'] == -1).sum()
+    consensus = df_match_only[
+        (df_match_only['anomaly_iso'] == -1) &
+        (df_match_only['anomaly_lof'] == -1) &
+        (df_match_only['overperformance'] > 0) &
+        (df_match_only['total_matches'] >= 3)
+    ].sort_values('overperformance', ascending=False)
 
-    return render_template('talent.html', talents=talents, total_anomalies=total_anomalies)
+    display_cols = ['player_name', 'country', 'position', 'points',
+                    'win_rate', 'total_matches', 'overperformance']
+
+    return render_template('talent.html',
+        talents_iso=emerging_iso[display_cols].head(15).to_dict('records'),
+        talents_lof=emerging_lof[display_cols].head(15).to_dict('records'),
+        talents_consensus=consensus[display_cols].head(10).to_dict('records'),
+        total_anomalies_iso=(df_match_only['anomaly_iso'] == -1).sum(),
+        total_anomalies_lof=(df_match_only['anomaly_lof'] == -1).sum())
 
 
 @app.route('/api/check-talent', methods=['POST'])
@@ -631,25 +856,38 @@ def api_check_talent():
         return jsonify({'error': 'Player not found or has no match data'}), 404
 
     p = player.iloc[0]
-    anom_feat = ['win_rate', 'position', 'overperformance',
-                 'points_per_match', 'total_matches', 'game_diff',
-                 'clutch_rate', 'trajectory_slope', 'avg_dominance']
-    features = p[anom_feat].fillna(0).values.reshape(1, -1)
-    features_scaled = scaler_anomaly.transform(features)
-
-    anomaly = iso_forest.predict(features_scaled)[0]
-    score = iso_forest.score_samples(features_scaled)[0]
-
     return jsonify({
         'player': player_name,
-        'is_anomaly': bool(anomaly == -1),
-        'is_emerging_talent': bool(anomaly == -1 and p.get('overperformance', 0) > 0),
-        'anomaly_score': round(float(score), 4),
+        'models': {
+            'Isolation Forest': {'is_anomaly': bool(p.get('anomaly_iso') == -1),
+                                  'score': round(float(p.get('score_iso', 0)), 4)},
+            'LOF': {'is_anomaly': bool(p.get('anomaly_lof') == -1)}
+        },
+        'is_emerging_talent': bool(p.get('anomaly_iso') == -1 and p.get('overperformance', 0) > 0),
+        'consensus': bool(p.get('anomaly_iso') == -1 and p.get('anomaly_lof') == -1 and p.get('overperformance', 0) > 0),
         'overperformance': round(float(p.get('overperformance', 0)), 4),
         'win_rate': round(float(p['win_rate']) * 100, 1),
         'position': int(p['position']),
         'total_matches': int(p['total_matches'])
     })
+
+
+# ─── 6. Time Series Forecast ─────────────────────────────────────────
+@app.route('/forecast')
+def forecast_page():
+    return render_template('forecast.html', eligible_players=ts_eligible)
+
+
+@app.route('/api/forecast', methods=['POST'])
+def api_forecast():
+    data = request.json
+    player_name = data.get('player_name')
+    if not player_name:
+        return jsonify({'error': 'No player specified'}), 400
+    result = compute_forecast(player_name)
+    if result is None:
+        return jsonify({'error': 'Time series not available'}), 404
+    return jsonify(result)
 
 
 # ─── Search API ─────────────────────────────────────────────────────

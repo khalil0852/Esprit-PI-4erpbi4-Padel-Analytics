@@ -3,7 +3,7 @@
 {% block content %}
 <div class="page-header">
     <h1>Talent Scout</h1>
-    <p>Isolation Forest anomaly detection identifies players who outperform their ranking expectations</p>
+    <p>Two anomaly detection models identify players who outperform their ranking (Isolation Forest · LOF)</p>
 </div>
 
 <div class="form-row">
@@ -17,105 +17,105 @@
 
 <div class="result-panel" id="result" style="margin-bottom:2rem">
     <div style="display:flex; align-items:center; gap:2rem; flex-wrap:wrap;">
-        <div>
-            <span style="color:var(--text2); font-size:0.85rem;">Player</span>
-            <div style="font-weight:700; font-size:1.2rem;" id="res-name"></div>
-        </div>
-        <div>
-            <span style="color:var(--text2); font-size:0.85rem;">Verdict</span>
-            <div id="res-verdict"></div>
-        </div>
-        <div>
-            <span style="color:var(--text2); font-size:0.85rem;">Anomaly Score</span>
-            <div style="font-family:'Space Mono',monospace; font-size:1.2rem;" id="res-score"></div>
-        </div>
-        <div>
-            <span style="color:var(--text2); font-size:0.85rem;">Overperformance</span>
-            <div style="font-family:'Space Mono',monospace; font-size:1.2rem;" id="res-overperf"></div>
-        </div>
-        <div>
-            <span style="color:var(--text2); font-size:0.85rem;">Win Rate</span>
-            <div style="font-family:'Space Mono',monospace; font-size:1.2rem;" id="res-wr"></div>
-        </div>
-        <div>
-            <span style="color:var(--text2); font-size:0.85rem;">Rank</span>
-            <div style="font-family:'Space Mono',monospace; font-size:1.2rem;" id="res-rank"></div>
-        </div>
+        <div><span style="color:var(--text2); font-size:0.85rem;">Player</span><div style="font-weight:700; font-size:1.2rem;" id="res-name"></div></div>
+        <div><span style="color:var(--text2); font-size:0.85rem;">Isolation Forest</span><div id="res-iso"></div></div>
+        <div><span style="color:var(--text2); font-size:0.85rem;">LOF</span><div id="res-lof"></div></div>
+        <div><span style="color:var(--text2); font-size:0.85rem;">Consensus</span><div id="res-consensus"></div></div>
+        <div><span style="color:var(--text2); font-size:0.85rem;">Overperformance</span><div style="font-family:'Space Mono',monospace; font-size:1.2rem;" id="res-overperf"></div></div>
+        <div><span style="color:var(--text2); font-size:0.85rem;">Win Rate</span><div style="font-family:'Space Mono',monospace; font-size:1.2rem;" id="res-wr"></div></div>
+        <div><span style="color:var(--text2); font-size:0.85rem;">Rank</span><div style="font-family:'Space Mono',monospace; font-size:1.2rem;" id="res-rank"></div></div>
     </div>
 </div>
 
-<div class="card">
-    <h3 style="margin-bottom:1rem">Detected Emerging Talents <span style="color:var(--accent); font-size:0.85rem;">({{ talents|length }} players)</span></h3>
-    <p style="color:var(--text2); font-size:0.85rem; margin-bottom:1rem;">
-        {{ total_anomalies }} anomalies detected · Showing overperformers with 3+ matches
-    </p>
-    {% if talents %}
+<!-- Consensus Talents -->
+<div class="card" style="margin-bottom:1.5rem; border-color:var(--gold);">
+    <h3 style="margin-bottom:0.75rem; color:var(--gold);">Consensus Emerging Talents (Both Models Agree) — {{ talents_consensus|length }} players</h3>
+    {% if talents_consensus %}
     <table>
-        <thead>
-            <tr>
-                <th>Player</th>
-                <th>Country</th>
-                <th>Rank</th>
-                <th>Points</th>
-                <th>Win Rate</th>
-                <th>Matches</th>
-                <th>Overperformance</th>
-                <th>Status</th>
-            </tr>
-        </thead>
+        <thead><tr><th>Player</th><th>Country</th><th>Rank</th><th>Points</th><th>Win Rate</th><th>Matches</th><th>Overperformance</th></tr></thead>
         <tbody>
-            {% for t in talents %}
-            <tr>
-                <td style="font-weight:700">{{ t.player_name }}</td>
-                <td>{{ t.country }}</td>
-                <td style="font-family:'Space Mono',monospace">#{{ t.position|int }}</td>
-                <td style="font-family:'Space Mono',monospace">{{ "{:,}".format(t.points|int) }}</td>
-                <td style="font-family:'Space Mono',monospace; color:var(--accent)">{{ "%.1f"|format(t.win_rate * 100) }}%</td>
-                <td style="font-family:'Space Mono',monospace">{{ t.total_matches|int }}</td>
-                <td style="font-family:'Space Mono',monospace; color:var(--gold)">+{{ "%.2f"|format(t.overperformance) }}</td>
-                <td><span class="talent-badge talent-yes">★ Emerging</span></td>
-            </tr>
-            {% endfor %}
+        {% for t in talents_consensus %}
+        <tr>
+            <td style="font-weight:700">{{ t.player_name }}</td><td>{{ t.country }}</td>
+            <td style="font-family:'Space Mono',monospace">#{{ t.position|int }}</td>
+            <td style="font-family:'Space Mono',monospace">{{ "{:,}".format(t.points|int) }}</td>
+            <td style="font-family:'Space Mono',monospace; color:var(--accent)">{{ "%.1f"|format(t.win_rate * 100) }}%</td>
+            <td style="font-family:'Space Mono',monospace">{{ t.total_matches|int }}</td>
+            <td style="font-family:'Space Mono',monospace; color:var(--gold)">+{{ "%.3f"|format(t.overperformance) }}</td>
+        </tr>
+        {% endfor %}
         </tbody>
     </table>
-    {% else %}
-    <p style="color:var(--text2)">No emerging talents detected with current parameters.</p>
-    {% endif %}
+    {% else %}<p style="color:var(--text2)">No consensus talents found.</p>{% endif %}
+</div>
+
+<div class="grid grid-2">
+    <!-- Isolation Forest -->
+    <div class="card">
+        <h3 style="margin-bottom:0.5rem; color:var(--accent);">Isolation Forest — {{ talents_iso|length }} emerging</h3>
+        <p style="color:var(--text2); font-size:0.85rem; margin-bottom:0.75rem;">{{ total_anomalies_iso }} total anomalies detected</p>
+        {% if talents_iso %}
+        <table>
+            <thead><tr><th>Player</th><th>Rank</th><th>WR</th><th>Overperf</th></tr></thead>
+            <tbody>
+            {% for t in talents_iso %}
+            <tr>
+                <td style="font-weight:700; font-size:0.85rem">{{ t.player_name }}</td>
+                <td style="font-family:'Space Mono',monospace; font-size:0.85rem">#{{ t.position|int }}</td>
+                <td style="font-family:'Space Mono',monospace; font-size:0.85rem; color:var(--accent)">{{ "%.0f"|format(t.win_rate * 100) }}%</td>
+                <td style="font-family:'Space Mono',monospace; font-size:0.85rem; color:var(--gold)">+{{ "%.3f"|format(t.overperformance) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+
+    <!-- LOF -->
+    <div class="card">
+        <h3 style="margin-bottom:0.5rem; color:var(--accent2);">Local Outlier Factor — {{ talents_lof|length }} emerging</h3>
+        <p style="color:var(--text2); font-size:0.85rem; margin-bottom:0.75rem;">{{ total_anomalies_lof }} total anomalies detected</p>
+        {% if talents_lof %}
+        <table>
+            <thead><tr><th>Player</th><th>Rank</th><th>WR</th><th>Overperf</th></tr></thead>
+            <tbody>
+            {% for t in talents_lof %}
+            <tr>
+                <td style="font-weight:700; font-size:0.85rem">{{ t.player_name }}</td>
+                <td style="font-family:'Space Mono',monospace; font-size:0.85rem">#{{ t.position|int }}</td>
+                <td style="font-family:'Space Mono',monospace; font-size:0.85rem; color:var(--accent)">{{ "%.0f"|format(t.win_rate * 100) }}%</td>
+                <td style="font-family:'Space Mono',monospace; font-size:0.85rem; color:var(--gold)">+{{ "%.3f"|format(t.overperformance) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 let selectedPlayer = null;
-initSearch('player-input', 'player-dropdown', (name) => {
-    selectedPlayer = name;
-    document.getElementById('check-btn').disabled = false;
-});
+initSearch('player-input', 'player-dropdown', (name) => { selectedPlayer = name; document.getElementById('check-btn').disabled = false; });
+
+function badge(isAnomaly, label) {
+    if (isAnomaly) return `<span style="display:inline-block;padding:0.2rem 0.6rem;border-radius:6px;font-size:0.85rem;font-weight:700;background:#06d6a020;color:var(--accent);">${label || 'Anomaly'}</span>`;
+    return `<span style="display:inline-block;padding:0.2rem 0.6rem;border-radius:6px;font-size:0.85rem;font-weight:700;background:var(--bg3);color:var(--text2);">Normal</span>`;
+}
 
 function checkTalent() {
     if (!selectedPlayer) return;
     document.getElementById('spinner').classList.add('show');
-
-    fetch('/api/check-talent', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ player_name: selectedPlayer })
-    })
-    .then(r => r.json())
-    .then(data => {
+    fetch('/api/check-talent', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({player_name:selectedPlayer}) })
+    .then(r => r.json()).then(data => {
         if (data.error) { alert(data.error); return; }
         document.getElementById('res-name').textContent = data.player;
-
-        const verdict = document.getElementById('res-verdict');
-        if (data.is_emerging_talent) {
-            verdict.innerHTML = '<span class="talent-badge talent-yes" style="font-size:1rem; padding:0.3rem 1rem;">★ Emerging Talent</span>';
-        } else if (data.is_anomaly) {
-            verdict.innerHTML = '<span class="talent-badge" style="font-size:1rem; padding:0.3rem 1rem; background:#ef476f20; color:var(--warn);">Anomaly (underperformer)</span>';
-        } else {
-            verdict.innerHTML = '<span class="talent-badge talent-no" style="font-size:1rem; padding:0.3rem 1rem;">Normal Profile</span>';
-        }
-
-        document.getElementById('res-score').textContent = data.anomaly_score;
+        document.getElementById('res-iso').innerHTML = badge(data.models['Isolation Forest'].is_anomaly, data.models['Isolation Forest'].is_anomaly ? 'Anomaly' : 'Normal');
+        document.getElementById('res-lof').innerHTML = badge(data.models['LOF'].is_anomaly, data.models['LOF'].is_anomaly ? 'Anomaly' : 'Normal');
+        document.getElementById('res-consensus').innerHTML = data.consensus
+            ? '<span style="display:inline-block;padding:0.2rem 0.6rem;border-radius:6px;font-size:0.85rem;font-weight:700;background:#ffd16620;color:var(--gold);">★ Emerging Talent</span>'
+            : badge(false, 'Not flagged');
         const op = data.overperformance;
         const opEl = document.getElementById('res-overperf');
         opEl.textContent = (op >= 0 ? '+' : '') + op.toFixed(4);
@@ -123,8 +123,7 @@ function checkTalent() {
         document.getElementById('res-wr').textContent = data.win_rate + '%';
         document.getElementById('res-rank').textContent = '#' + data.position;
         document.getElementById('result').classList.add('show');
-    })
-    .finally(() => document.getElementById('spinner').classList.remove('show'));
+    }).finally(() => document.getElementById('spinner').classList.remove('show'));
 }
 </script>
 {% endblock %}

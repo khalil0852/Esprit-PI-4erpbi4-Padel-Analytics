@@ -54,6 +54,82 @@ dim_player = pd.read_csv(os.path.join(DATA_DIR, "dim_player.csv"))
 dim_tournament = pd.read_csv(os.path.join(DATA_DIR, "dim_tournament.csv"))
 print(f"Loaded: {len(fact_match)} matches, {fact_player['player_name'].nunique()} players")
 
+# ─── A.0 NAME FIXES (encoding mismatches between CSVs) ──────────────
+print("\n>>> Fixing player name mismatches...")
+
+# Find the exact encoded Alvaro name in fact_player
+_alvaro = fact_player[fact_player['player_name'].str.contains('lvaro Melendez', na=False)].sort_values('points', ascending=False)
+_alvaro_name = _alvaro.iloc[0]['player_name'] if len(_alvaro) > 0 else None
+
+NAME_MAP = {
+    "Federico Mouri\u00f1o": "Federico Mouri\u00c3\u00b1o",
+    "Ignacio Vilari\u00f1o Gestoso": "Ignacio Vilari\u00c3\u00b1o Gestoso",
+    "Valentino Libaak": "Valentino Gabriel Libaak",
+    "Leandro Roman Augsburguer": "Leandro Augsburger",
+    "Maximiliano Sanchez Aguero": "Maximiliano Sanchez",
+    "Agustin Gomez Silingo": "Agustin Silingo",
+    "Pablo Lij\u00f3": "Pablo Lijo",
+    "Agust\u00edn Torre": "Eduardo Agustin Torre",
+    "Manuel Casta\u00f1o Salguero": "Manuel Casta\u00c3\u00b1o Salguero",
+    "Jes\u00fas Moya Sos": "Jesus Moya Sos",
+    "Francisco Miguel Ramirez Navas": "Fran Ramirez Navas",
+    "Renzo Gabriel Nu\u00f1ez": "Renzo Gabriel Nu\u00c3\u00b1ez",
+    "Diego Arredondo Garc\u00eda": "Diego Arredondo Garcia",
+    "Diego Garc\u00eda": "Diego Garcia",
+    "Juan Manuel Arga\u00f1aras": "Juan Manuel Arga\u00c3\u00b1aras",
+    "Pau Mi\u00f1ano Ortinez": "Pau Mi\u00c3\u00b1ano Ortinez",
+    "Nacho Moragues Molt\u00f2": "Nacho Moragues Molt\u00c3\u00b2",
+    "Pablo Marqu\u00e9s Gonzalez": "Pablo Marqu\u00c3\u00a9s Gonzalez",
+    "Martin Sanchez Pi\u00f1eiro": "Mart\u00c3\u00adn S\u00c3\u00a1nchez Pi\u00c3\u00b1eiro",
+    "Pyry Hyrkk\u00f6nen": "Pyry Hyrkk\u00c3\u00b6nen",
+    "Sebastian Mu\u00f1oz Campos": "Sebastian Mu\u00c3\u00b1oz Campos",
+    "Rayyan Al Jufairi": "Rayan Abdulla Aljufairi",
+    "Khalid Saadon al-Kuwari": "Khalid Saadon Alkuwari",
+    "Aimar Go\u00f1i Lacabe": "Aimar Go\u00c3\u00b1i Lacabe",
+}
+if _alvaro_name:
+    NAME_MAP["\u00c1lvaro Melendez Amaya"] = _alvaro_name
+    NAME_MAP["\u00c1lvaro M\u00e9lendez Amaya"] = _alvaro_name
+
+# Players to drop (genuinely not in rankings, mostly 1 match each)
+DROP_PLAYERS = [
+    "Abdulaziz Saadon Alkuwari", "Amr Hassan", "Andres Devletian",
+    "Carlos Zarhi", "Diego Gonzalez Almedo", "Eduardo Andres Lopez Figuera",
+    "Juan Martin Diaz Martinez", "Manuel Yuste Apolinar", "Mohammed Abdulla",
+    "Roberto Alonso Rodriguez", "Santiago Frugoni"
+]
+
+# Apply name fixes to all player columns + team keys
+name_cols = ['team_a_player1','team_a_player2','team_b_player1','team_b_player2']
+for col in name_cols:
+    fact_match[col] = fact_match[col].replace(NAME_MAP)
+
+# Rebuild team keys after name fixes
+fact_match['team_a_key'] = fact_match['team_a_player1'] + ' / ' + fact_match['team_a_player2']
+fact_match['team_b_key'] = fact_match['team_b_player1'] + ' / ' + fact_match['team_b_player2']
+
+# Fix winner_team to match new keys
+for _, row in fact_match.iterrows():
+    old_winner = row['winner_team']
+    if old_winner not in [row['team_a_key'], row['team_b_key']]:
+        # Determine winner from original data by checking which team's players are in the winner string
+        a_players = {row['team_a_player1'], row['team_a_player2']}
+        for p in a_players:
+            if p in str(old_winner) or any(orig in str(old_winner) for orig, new in NAME_MAP.items() if new == p):
+                fact_match.at[_, 'winner_team'] = row['team_a_key']
+                break
+        else:
+            fact_match.at[_, 'winner_team'] = row['team_b_key']
+
+# Drop matches involving unrecoverable players
+all_drop = set(DROP_PLAYERS)
+mask = ~(fact_match['team_a_player1'].isin(all_drop) | fact_match['team_a_player2'].isin(all_drop) |
+         fact_match['team_b_player1'].isin(all_drop) | fact_match['team_b_player2'].isin(all_drop))
+n_before = len(fact_match)
+fact_match = fact_match[mask].reset_index(drop=True)
+print(f"[✓] Fixed 26 name mismatches, dropped {n_before - len(fact_match)} matches with 11 unrecoverable players")
+print(f"[✓] Matches: {n_before} → {len(fact_match)} ({len(fact_match)/n_before*100:.1f}% retained)")
+
 social_cols = ['instagram_followers','youtube_subscribers','tiktok_followers','twitter_followers','wikipedia_views']
 for c in social_cols:
     fact_player[c] = pd.to_numeric(fact_player[c], errors='coerce').fillna(0)

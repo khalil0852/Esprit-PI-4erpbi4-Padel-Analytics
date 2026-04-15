@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Forecast — Padel Analytics{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Win Rate Forecast</h1>
+    <p>Quarterly time series (ARIMA · Prophet) with tournament categories, rounds & dominance data</p>
+</div>
+<div class="form-row">
+    <div class="search-box" style="flex:1">
+        <input type="text" id="player-input" placeholder="Search player ({{ eligible_players|length }} with 6+ quarters)..." autocomplete="off">
+        <div class="dropdown" id="player-dropdown"></div>
+    </div>
+    <button class="btn" id="forecast-btn" onclick="runForecast()" disabled>Forecast</button>
+    <div class="spinner" id="spinner"></div>
+</div>
+<div class="result-panel" id="result">
+    <div style="margin-bottom:1.5rem;">
+        <h2 id="res-player" style="margin-bottom:0.25rem;"></h2>
+        <span style="color:var(--text2);font-size:0.9rem;" id="res-info"></span>
+    </div>
+    <h3 style="color:var(--gold);margin:0 0 1rem;">Future Predictions</h3>
+    <div class="grid grid-2" id="future-cards" style="margin-bottom:2rem;"></div>
+    <h3 style="color:var(--text2);margin:0 0 1rem;">Model Accuracy (holdout quarters)</h3>
+    <div id="eval-section" style="margin-bottom:2rem;"></div>
+    <h3 style="color:var(--text2);margin:0 0 0.75rem;cursor:pointer;" onclick="document.getElementById('hw').style.display=document.getElementById('hw').style.display==='none'?'block':'none'">Quarterly History ▾</h3>
+    <div id="hw" style="display:none;max-height:400px;overflow-y:auto;">
+        <table><thead><tr><th>Quarter</th><th>Win Rate</th><th>Weighted WR</th><th>Matches</th><th>Best Round</th><th>Dominance</th><th>Late %</th></tr></thead>
+        <tbody id="hb"></tbody></table>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let sel=null;
+initSearch('player-input','player-dropdown',(n)=>{sel=n;document.getElementById('forecast-btn').disabled=false;});
+const RN={1:'R64',2:'R32',3:'R16',4:'QF',5:'SF',6:'Final'};
+function runForecast(){
+    if(!sel)return;
+    document.getElementById('forecast-btn').disabled=true;
+    document.getElementById('spinner').classList.add('show');
+    fetch('/api/forecast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({player_name:sel})})
+    .then(r=>r.json()).then(d=>{
+        if(d.error){alert(d.error);return;}
+        document.getElementById('res-player').textContent=d.player;
+        document.getElementById('res-info').textContent=d.n_quarters+' quarters · Last: '+d.last_quarter+' · Predicting '+d.n_future+' quarters ahead';
+        let fh='';
+        for(const[m,md]of Object.entries(d.models)){
+            if(md.error){fh+='<div class="card"><h3>'+m+'</h3><p style="color:var(--warn)">'+md.error+'</p></div>';continue;}
+            const c=m==='ARIMA'?'#ef476f':'#06d6a0';
+            fh+='<div class="card" style="border-left:3px solid '+c+'"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;"><h3 style="color:'+c+';margin:0;">'+m+'</h3><span style="font-size:0.75rem;color:var(--text2);background:var(--bg3);padding:0.2rem 0.5rem;border-radius:4px;">'+(md.order||'auto')+'</span></div>';
+            for(const[q,v]of Object.entries(md.future_predictions)){
+                const w=Math.max(Math.min(v,100),3);
+                fh+='<div style="margin-bottom:0.75rem;"><div style="display:flex;justify-content:space-between;font-size:0.9rem;margin-bottom:0.3rem;"><span style="font-weight:700;">'+q+'</span><span style="font-family:\'Space Mono\',monospace;font-weight:700;color:'+c+';font-size:1.1rem;">'+v+'%</span></div><div style="height:10px;background:var(--bg3);border-radius:5px;overflow:hidden;"><div style="height:100%;width:'+w+'%;background:'+c+';border-radius:5px;"></div></div></div>';
+            }
+            fh+='</div>';
+        }
+        document.getElementById('future-cards').innerHTML=fh;
+        let eh='<div class="grid grid-2">';
+        for(const[m,md]of Object.entries(d.models)){
+            if(md.error)continue;
+            const c=m==='ARIMA'?'#ef476f':'#06d6a0';
+            eh+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;"><span style="font-weight:700;color:'+c+';">'+m+'</span><span style="font-family:\'Space Mono\',monospace;font-size:0.85rem;color:var(--text2);">MAE: '+md.mae_pct+'%</span></div><table style="margin:0;"><thead><tr><th>Quarter</th><th>Actual</th><th>Predicted</th><th>Error</th></tr></thead><tbody>';
+            const at=md.actual_test||{},pr=md.eval_predictions||{};
+            for(const q of Object.keys(at)){
+                const a=at[q],p=pr[q]||'—';
+                const e=typeof p==='number'?(p-a).toFixed(1):'—';
+                const ec=Math.abs(parseFloat(e))<=10?'var(--accent)':'var(--warn)';
+                eh+='<tr><td>'+q+'</td><td style="font-family:\'Space Mono\',monospace">'+a+'%</td><td style="font-family:\'Space Mono\',monospace;color:'+c+'">'+p+'%</td><td style="font-family:\'Space Mono\',monospace;color:'+ec+'">'+(parseFloat(e)>0?'+':'')+e+'%</td></tr>';
+            }
+            eh+='</tbody></table><div style="margin-top:0.75rem;display:flex;gap:2rem;"><div><span style="color:var(--text2);font-size:0.75rem;">MAE</span><div style="font-family:\'Space Mono\',monospace;font-size:1.2rem;font-weight:700;">'+md.mae+'</div></div><div><span style="color:var(--text2);font-size:0.75rem;">RMSE</span><div style="font-family:\'Space Mono\',monospace;font-size:1.2rem;font-weight:700;">'+md.rmse+'</div></div></div></div>';
+        }
+        eh+='</div>';
+        document.getElementById('eval-section').innerHTML=eh;
+        let hh='';
+        for(const h of d.history.slice().reverse()){
+            const dc=h.avg_dominance>=0?'var(--accent)':'var(--warn)';
+            hh+='<tr><td style="font-weight:700">'+h.quarter+'</td><td style="font-family:\'Space Mono\',monospace;color:var(--accent)">'+h.win_rate+'%</td><td style="font-family:\'Space Mono\',monospace">'+h.weighted_wr+'%</td><td style="font-family:\'Space Mono\',monospace">'+h.matches+'</td><td>'+(RN[h.max_round]||h.max_round)+'</td><td style="font-family:\'Space Mono\',monospace;color:'+dc+'">'+h.avg_dominance+'</td><td style="font-family:\'Space Mono\',monospace">'+h.late_round_pct+'%</td></tr>';
+        }
+        document.getElementById('hb').innerHTML=hh;
+        document.getElementById('result').classList.add('show');
+    }).finally(()=>{document.getElementById('forecast-btn').disabled=false;document.getElementById('spinner').classList.remove('show');});
+}
+</script>
+{% endblock %}
