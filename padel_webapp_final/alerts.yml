@@ -1,0 +1,39 @@
+groups:
+  - name: padel_alerts
+    interval: 15s
+    rules:
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rate(flask_http_request_duration_seconds_bucket[1m])) > 1
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency detected"
+          description: "95th percentile latency is above 1 second"
+
+      - alert: HighErrorRate
+        expr: rate(flask_http_request_exceptions_total[1m]) > 0.1
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate"
+          description: "Error rate exceeds 10%"
+
+      - alert: AccuracyDegradation
+        expr: model_accuracy < 0.80
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Model accuracy degraded"
+          description: "Accuracy dropped below baseline (0.80)"
+
+      - alert: DataDrift
+        expr: data_freshness_hours > 24
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Data is stale"
+          description: "Data hasn't been refreshed in 24+ hours"

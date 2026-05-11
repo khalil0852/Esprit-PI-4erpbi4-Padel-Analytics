@@ -1,77 +1,140 @@
 {% extends "base.html" %}
 {% block title %}Dashboard — Padel Analytics{% endblock %}
+
 {% block content %}
 <div class="page-header">
     <h1>Dashboard</h1>
-    <p>Padel player analytics powered by machine learning — 2023–2025 data</p>
+    <p>Premier Padel Analytics · Saison 2023-2025</p>
 </div>
 
-<div class="grid grid-4" style="margin-bottom:2rem">
-    <div class="card">
-        <h3>Total Players</h3>
-        <div class="value">{{ "{:,}".format(total_players) }}</div>
-        <div class="sub">across 111 countries</div>
-    </div>
-    <div class="card">
-        <h3>Matches Analyzed</h3>
-        <div class="value">{{ "{:,}".format(total_matches) }}</div>
-        <div class="sub">{{ total_tournaments }} tournaments</div>
-    </div>
-    <div class="card">
-        <h3>ML Models</h3>
-        <div class="value">14</div>
-        <div class="sub">trained & deployed</div>
-    </div>
-    <div class="card">
-        <h3>Segments</h3>
-        <div class="value">4</div>
-        <div class="sub">player profiles</div>
+{# ────────────────────────────────────────────────────────────────────
+   ROLE-SPECIFIC BANNER — shows above the Power BI iframe
+   ──────────────────────────────────────────────────────────────────── #}
+<style>
+    .role-banner {
+        padding: 1rem 1.25rem;
+        border-radius: 8px;
+        margin-bottom: 1.25rem;
+        border-left: 4px solid;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .role-federation { border-color: #F4D35E; background: rgba(244, 211, 94, 0.1); }
+    .role-sponsor    { border-color: #06D6A0; background: rgba(6, 214, 160, 0.1); }
+    .role-joueur     { border-color: #FF6B6B; background: rgba(255, 107, 107, 0.1); }
+</style>
+
+<div class="role-banner role-{{ session.role|lower }}">
+    {% if session.role == 'Federation' %}
+        <div style="font-size: 1.5rem;">👑</div>
+        <div style="flex: 1; min-width: 200px;">
+            <div style="font-weight: 700; color: #F4D35E; font-size: 1rem;">Federation View</div>
+            <div style="color: var(--text2); font-size: 0.9rem; margin-top: 0.25rem;">
+                Full data access — all players, sponsors, tournaments visible
+            </div>
+        </div>
+        <div class="tag tag-stars" style="white-space: nowrap;">RLS: Full Access</div>
+
+    {% elif session.role == 'Sponsor' %}
+        <div style="font-size: 1.5rem;">🏷️</div>
+        <div style="flex: 1; min-width: 200px;">
+            <div style="font-weight: 700; color: #06D6A0; font-size: 1rem;">Sponsor View — Bullpadel</div>
+            <div style="color: var(--text2); font-size: 0.9rem; margin-top: 0.25rem;">
+                Filtered to your brand — Bullpadel data only
+            </div>
+        </div>
+        <div class="tag tag-contenders" style="white-space: nowrap;">RLS: Brand Filtered</div>
+
+    {% elif session.role == 'Joueur' %}
+        <div style="font-size: 1.5rem;">⚡</div>
+        <div style="flex: 1; min-width: 200px;">
+            <div style="font-weight: 700; color: #FF6B6B; font-size: 1rem;">Joueur View — Agustin Tapia</div>
+            <div style="color: var(--text2); font-size: 0.9rem; margin-top: 0.25rem;">
+                Personal profile — your matches and stats only
+            </div>
+        </div>
+        <div class="tag tag-newcomers" style="white-space: nowrap;">RLS: Player Filtered</div>
+    {% endif %}
+</div>
+
+{# ────────────────────────────────────────────────────────────────────
+   POWER BI EMBEDDED REPORT (same for all roles — RLS does the filtering)
+   ──────────────────────────────────────────────────────────────────── #}
+<div class="card" style="padding: 0; overflow: hidden;">
+    <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+        <iframe
+            title="official_dashboard"
+           src="https://app.powerbi.com/reportEmbed?reportId=c5362bb9-3c9b-4296-ae21-783c11a7ffe1&autoAuth=true&ctid=604f1a96-cbe8-43f8-abbf-f8eaf5d85730"
+            frameborder="0"
+            allowFullScreen="true"
+            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0;">
+        </iframe>
     </div>
 </div>
 
-<div class="grid grid-4" style="margin-bottom:2.5rem">
-    {% for seg, count in segment_stats.items() %}
-    <div class="card" style="text-align:center;">
-        <span class="tag tag-{{ seg|lower }}">{{ seg }}</span>
-        <div style="font-family:'Space Mono',monospace; font-size:1.75rem; font-weight:700; margin:0.5rem 0;">{{ "{:,}".format(count) }}</div>
-        <div class="sub">players</div>
+{# ────────────────────────────────────────────────────────────────────
+   QUICK ACCESS TILES — only show ML tools this role can use
+   ──────────────────────────────────────────────────────────────────── #}
+<div style="margin-top: 1.5rem;">
+    <h3 style="margin-bottom: 1rem; color: var(--text2); font-size: 0.9rem; letter-spacing: 0.1em;">
+        QUICK ACCESS · ML TOOLS
+    </h3>
+    <div class="grid grid-3">
+        {% if 'predict' in user_pages %}
+        <a href="/predict" class="card" style="text-decoration:none; cursor:pointer; border-color:var(--accent2);">
+            <h3 style="color:var(--accent2)">Win Prediction</h3>
+            <p style="color:var(--text); font-size:0.9rem; margin-top:0.5rem;">
+                Predict match outcomes — Gradient Boosting (AUC 93.5%)
+            </p>
+        </a>
+        {% endif %}
+
+        {% if 'points' in user_pages %}
+        <a href="/points" class="card" style="text-decoration:none; cursor:pointer; border-color:var(--gold);">
+            <h3 style="color:var(--gold)">Points Forecast</h3>
+            <p style="color:var(--text); font-size:0.9rem; margin-top:0.5rem;">
+                Forecast ranking points — XGBoost regressor (R² 0.879)
+            </p>
+        </a>
+        {% endif %}
+
+        {% if 'segments' in user_pages %}
+        <a href="/segments" class="card" style="text-decoration:none; cursor:pointer; border-color:var(--accent);">
+            <h3 style="color:var(--accent)">Player Segments</h3>
+            <p style="color:var(--text); font-size:0.9rem; margin-top:0.5rem;">
+                4 K-Means clusters — Stars, Contenders, Regulars, Newcomers
+            </p>
+        </a>
+        {% endif %}
+
+        {% if 'recommend' in user_pages %}
+        <a href="/recommend" class="card" style="text-decoration:none; cursor:pointer; border-color:var(--warn);">
+            <h3 style="color:var(--warn)">Equipment Rec</h3>
+            <p style="color:var(--text); font-size:0.9rem; margin-top:0.5rem;">
+                Personalized gear recommendations from pro player profiles
+            </p>
+        </a>
+        {% endif %}
+
+        {% if 'talent' in user_pages %}
+        <a href="/talent" class="card" style="text-decoration:none; cursor:pointer; border-color:var(--accent3);">
+            <h3 style="color:var(--accent3)">Talent Scout</h3>
+            <p style="color:var(--text); font-size:0.9rem; margin-top:0.5rem;">
+                Emerging-talent detection — Isolation Forest + LOF consensus
+            </p>
+        </a>
+        {% endif %}
+
+        {% if 'forecast' in user_pages %}
+        <a href="/forecast" class="card" style="text-decoration:none; cursor:pointer; border-color:var(--accent2);">
+            <h3 style="color:var(--accent2)">Win-Rate Forecast</h3>
+            <p style="color:var(--text); font-size:0.9rem; margin-top:0.5rem;">
+                Quarterly trend forecast — Prophet time-series (MAE 0.246)
+            </p>
+        </a>
+        {% endif %}
     </div>
-    {% endfor %}
-</div>
-
-<div class="card" style="margin-bottom:2rem">
-    <h3 style="margin-bottom:1rem">Top 10 Players by Points</h3>
-    <table>
-        <thead>
-            <tr><th>#</th><th>Player</th><th>Country</th><th>Points</th><th>Rank</th><th>Segment</th></tr>
-        </thead>
-        <tbody>
-            {% for p in top_players %}
-            <tr>
-                <td style="color:var(--text2)">{{ loop.index }}</td>
-                <td style="font-weight:700">{{ p.player_name }}</td>
-                <td>{{ p.country }}</td>
-                <td style="font-family:'Space Mono',monospace; color:var(--accent)">{{ "{:,}".format(p.points) }}</td>
-                <td style="font-family:'Space Mono',monospace">#{{ p.position }}</td>
-                <td><span class="tag tag-{{ p.segment|lower }}">{{ p.segment }}</span></td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-
-<div class="grid grid-3">
-    <a href="/predict" class="card" style="text-decoration:none; cursor:pointer; border-color:var(--accent2);">
-        <h3 style="color:var(--accent2)">Win Prediction</h3>
-        <p style="color:var(--text); font-size:0.95rem; margin-top:0.5rem;">Predict match outcomes using Random Forest, Gradient Boosting & XGBoost</p>
-    </a>
-    <a href="/points" class="card" style="text-decoration:none; cursor:pointer; border-color:var(--gold);">
-        <h3 style="color:var(--gold)">Points Forecast</h3>
-        <p style="color:var(--text); font-size:0.95rem; margin-top:0.5rem;">Estimate player ranking points with Ridge, Lasso & XGBoost regression</p>
-    </a>
-    <a href="/recommend" class="card" style="text-decoration:none; cursor:pointer; border-color:var(--warn);">
-        <h3 style="color:var(--warn)">Equipment Rec</h3>
-        <p style="color:var(--text); font-size:0.95rem; margin-top:0.5rem;">Get gear recommendations based on pro player profile similarity</p>
-    </a>
 </div>
 {% endblock %}

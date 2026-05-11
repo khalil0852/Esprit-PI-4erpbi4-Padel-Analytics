@@ -311,18 +311,42 @@
     </style>
 </head>
 <body>
-    <nav>
-        <a href="/" class="nav-brand">PADEL<span>analytics</span></a>
-        <div class="nav-links">
-            <a href="/" class="{{ 'active' if request.path == '/' else '' }}">Dashboard</a>
-            <a href="/predict" class="{{ 'active' if request.path == '/predict' else '' }}">Win Prediction</a>
-            <a href="/points" class="{{ 'active' if request.path == '/points' else '' }}">Points Forecast</a>
-            <a href="/segments" class="{{ 'active' if request.path == '/segments' else '' }}">Segments</a>
-            <a href="/recommend" class="{{ 'active' if request.path == '/recommend' else '' }}">Equipment</a>
-            <a href="/talent" class="{{ 'active' if request.path == '/talent' else '' }}">Talent Scout</a>
-            <a href="/forecast" class="{{ 'active' if request.path == '/forecast' else '' }}">Forecast</a>
+<nav>
+    <a href="/" class="nav-brand">PADEL<span>analytics</span></a>
+    <div class="nav-links">
+        {% set page_routes = {'index': '/', 'predict': '/predict', 'points': '/points', 'segments': '/segments', 'recommend': '/recommend', 'talent': '/talent', 'forecast': '/forecast', 'operations': '/operations'} %}
+        {% for page in user_pages %}
+            {% if page == 'index' %}
+                <a href="/" class="{{ 'active' if request.path == '/' else '' }}">Dashboard</a>
+            {% else %}
+                <a href="{{ page_routes[page] }}" class="{{ 'active' if request.path == page_routes[page] else '' }}">{{ PAGE_LABELS[page] }}</a>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    {% if session.username %}
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 1rem;">
+        <div style="text-align: right; line-height: 1.3;">
+            <div style="font-size: 0.85rem; font-weight: 600;">{{ session.display_name }}</div>
+            <div style="font-size: 0.7rem; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px;">
+                {% if session.role == 'Federation' %}
+                <span style="color: var(--gold);">👑 {{ session.role }}</span>
+                {% elif session.role == 'Sponsor' %}
+                <span style="color: var(--accent2);">🏷️ {{ session.role }}</span>
+                {% else %}
+                <span style="color: var(--accent);">⚡ {{ session.role }}</span>
+                {% endif %}
+            </div>
         </div>
-    </nav>
+        <a href="/logout" style="padding: 0.5rem 1rem; background: var(--bg3); border-radius: 8px; color: var(--text2); font-size: 0.85rem; text-decoration: none; transition: all 0.2s;"
+           onmouseover="this.style.color='var(--warn)'"
+           onmouseout="this.style.color='var(--text2)'">
+           Sign out
+        </a>
+    </div>
+    {% endif %}
+</nav>
+
     <div class="container">
         {% block content %}{% endblock %}
     </div>

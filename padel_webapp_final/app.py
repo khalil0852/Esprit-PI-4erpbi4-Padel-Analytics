@@ -15,13 +15,209 @@ import os
 import numpy as np
 import pandas as pd
 import joblib
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from functools import wraps
 
 # ═══════════════════════════════════════════════════════════════════════
 # INIT
 # ═══════════════════════════════════════════════════════════════════════
 
 app = Flask(__name__)
+app.secret_key = 'padel-analytics-secret-key-change-me-in-production'
+# ─── Prometheus Metrics ──────────────────────────────────────────────
+from prometheus_flask_exporter import PrometheusMetrics
+from prometheus_client import Counter, Histogram, Gauge
+import time
+
+metrics = PrometheusMetrics(app)
+metrics.info('app_info', 'Padel Analytics ML API', version='1.0.0')
+
+# Custom metrics
+prediction_counter = Counter('predictions_total', 'Total predictions made', ['endpoint', 'model'])
+prediction_latency = Histogram('prediction_duration_seconds', 'Prediction latency', ['endpoint'])
+model_accuracy_gauge = Gauge('model_accuracy', 'Current model accuracy', ['model_name'])
+model_confidence_gauge = Gauge('model_confidence', 'Average prediction confidence', ['model_name'])
+data_freshness_gauge = Gauge('data_freshness_hours', 'Hours since last data update')
+error_counter = Counter('api_errors_total', 'API errors', ['endpoint', 'error_type'])
+
+# Set initial baselines (from MLflow best runs)
+model_accuracy_gauge.labels(model_name='gradient_boosting').set(0.854)
+model_accuracy_gauge.labels(model_name='xgboost_regressor').set(0.879)
+data_freshness_gauge.set(0) 
+
+# ─── Structured Logging ──────────────────────────────────────────────
+import logging
+import sys
+
+os.makedirs('logs', exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    handlers=[
+        logging.FileHandler('logs/app.log'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+logger = logging.getLogger('padel-mlops')
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# LOGIN SYSTEM (RLS-aligned)
+# ═══════════════════════════════════════════════════════════════════════
+USERS = {
+    'federation': {
+        'password': 'federation123',
+        'role': 'Federation',
+        'email': 'khalil.bensouissi@esprit.tn',
+        'display_name': 'Khalil Bensouissi',
+        'access': 'Full data access (Federation admin)'
+    },
+    'sponsor': {
+        'password': 'sponsor123',
+        'role': 'Sponsor',
+        'email': 'Ghanmi.Nidhal@esprit.tn',
+        'display_name': 'Nidhal Ghanmi',
+        'access': 'Bullpadel sponsor data only'
+    },
+    'joueur': {
+        'password': 'joueur123',
+        'role': 'Joueur',
+        'email': 'Rayene.Chouikh@esprit.tn',
+        'display_name': 'Rayene Chouikh',
+        'access': 'Agustin Tapia personal data only'
+    },
+    'admin': {
+        'password': 'admin123',
+        'role': 'Admin',
+        'email': 'admin@padel-analytics.local',
+        'display_name': 'System Administrator',
+        'access': 'Full system access — all data + operations control panel'
+    },
+}
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'username' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ─── ROLE-BASED ACCESS CONTROL ──────────────────────────────────────────
+# Maps each role to the pages it can access
+ROLE_PAGES = {
+    'Federation': ['index', 'predict', 'points', 'segments', 'recommend', 'talent', 'forecast'],
+    'Sponsor':    ['index', 'segments', 'recommend', 'forecast'],
+    'Joueur':     ['index', 'predict', 'points', 'recommend', 'forecast'],
+    'Admin':      ['index', 'predict', 'points', 'segments', 'recommend', 'talent', 'forecast', 'operations'],
+}
+
+# Pretty labels for each page (used in nav + welcome message)
+PAGE_LABELS = {
+    'index': 'Dashboard',
+    'predict': 'Win Prediction',
+    'points': 'Points Forecast',
+    'segments': 'Segments',
+    'recommend': 'Equipment',
+    'talent': 'Talent Scout',
+    'forecast': 'Forecast',
+    'operations': 'Operations',
+}
+
+
+def role_required(*allowed_roles):
+    """Decorator that allows access only if user's role is in allowed_roles."""
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            if 'username' not in session:
+                return redirect(url_for('login'))
+            if session.get('role') not in allowed_roles:
+                logger.warning(f"Access denied: user={session.get('username')} role={session.get('role')} tried to access {request.path}")
+                return render_template('access_denied.html', role=session.get('role'), page=request.path), 403
+            return f(*args, **kwargs)
+        return decorated
+    return decorator
+
+
+@app.context_processor
+def inject_user_pages():
+    """Make ROLE_PAGES and PAGE_LABELS available in all templates."""
+    if 'role' in session:
+        user_pages = ROLE_PAGES.get(session['role'], [])
+    else:
+        user_pages = []
+    return {
+        'user_pages': user_pages,
+        'PAGE_LABELS': PAGE_LABELS
+    }
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip().lower()
+        password = request.form.get('password', '')
+        user = USERS.get(username)
+        if user and user['password'] == password:
+            session['username'] = username
+            session['role'] = user['role']
+            session['display_name'] = user['display_name']
+            session['email'] = user['email']
+            session['access'] = user['access']
+            logger.info(f"User logged in: {username} (role={user['role']})")
+            return redirect(url_for('index'))
+        logger.warning(f"Failed login attempt for username: {username}")
+        return render_template('login.html', error='Invalid username or password')
+    return render_template('login.html')
+
+
+@app.route('/logout')
+def logout():
+    username = session.get('username', 'unknown')
+    logger.info(f"User logged out: {username}")
+    session.clear()
+    return redirect(url_for('login'))
+
+
+# ─── Simulation Endpoint for Drift Detection ─────────────────────────
+@app.route('/api/simulate-drift', methods=['POST'])
+def api_simulate_drift():
+    """Simulate model drift by manually setting accuracy gauge."""
+    data = request.get_json()
+    accuracy = data.get('accuracy', 0.854)
+    model = data.get('model', 'gradient_boosting')
+    freshness_hours = data.get('freshness_hours', None)
+    
+    model_accuracy_gauge.labels(model_name=model).set(accuracy)
+    
+    # Optionally update data freshness (used by simulation script to trigger DataDrift alert)
+    if freshness_hours is not None:
+        data_freshness_gauge.set(float(freshness_hours))
+        if freshness_hours > 24:
+            logger.warning(f"DATA STALE: data_freshness={freshness_hours}h (threshold: 24h)")
+    
+    baseline = 0.854
+    drift = (baseline - accuracy) * 100
+    
+    if drift > 5:
+        logger.warning(f"DRIFT DETECTED: {model} accuracy={accuracy:.4f}, drift={drift:.2f}% (>5% threshold)")
+    elif drift > 2:
+        logger.info(f"Mild drift: {model} accuracy={accuracy:.4f}, drift={drift:.2f}%")
+    else:
+        logger.info(f"Healthy: {model} accuracy={accuracy:.4f}")
+    
+    return jsonify({
+        'model': model,
+        'accuracy': accuracy,
+        'baseline': baseline,
+        'drift_percent': round(drift, 2),
+        'data_freshness_hours': freshness_hours,
+        'status': 'DRIFT_DETECTED' if drift > 5 else 'HEALTHY'
+    })
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "models")
@@ -412,6 +608,7 @@ def compute_forecast(player_name, n_future=2):
 
     # ─── Prophet ───
     try:
+        raise ImportError("Prophet disabled in Docker")
         from prophet import Prophet as ProphetModel
         prop_df = pd.DataFrame({'ds': target.index, 'y': target.values})
 
@@ -470,6 +667,7 @@ print(f"[✓] Data ready: {total_players} players, {total_matches} matches")
 # ═══════════════════════════════════════════════════════════════════════
 
 @app.route('/')
+@login_required
 def index():
     top_players = df_display.nlargest(10, 'points')[
         ['player_name', 'country', 'points', 'position', 'segment']
@@ -484,8 +682,15 @@ def index():
 
 # ─── 1. Classification: Win Prediction ──────────────────────────────
 @app.route('/predict')
+@role_required('Federation', 'Joueur', 'Admin')
 def predict_page():
-    return render_template('predict.html', players=player_list)
+    return render_template('predict.html', players=player_list)  
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    # Power BI dashboard removed; redirect to home
+    return redirect(url_for('index'))
 
 
 @app.route('/api/predict', methods=['POST'])
@@ -669,6 +874,7 @@ def api_predict_team():
 
 # ─── 2. Regression: Points Prediction ───────────────────────────────
 @app.route('/points')
+@role_required('Federation', 'Joueur', 'Admin')
 def points_page():
     return render_template('points.html', players=player_list)
 
@@ -686,7 +892,8 @@ def api_points():
     reg_feat = ['total_matches', 'total_wins', 'win_rate', 'game_diff',
                 'tournaments_played', 'years_active', 'avg_round', 'max_round',
                 'clutch_rate', 'avg_dominance', 'wr_late', 'partner_loyalty',
-                'trajectory_slope', 'gender_enc', 'log_social']
+                'trajectory_slope', 'gender_enc', 'log_social',
+                'position']
     features = pd.DataFrame([[p.get(f, 0) for f in reg_feat]], columns=reg_feat)
     features['wr_x_matches'] = features['win_rate'] * features['total_matches']
     features['wins_per_tourn'] = features['total_wins'] / max(features['tournaments_played'].iloc[0], 1)
@@ -711,6 +918,7 @@ def api_points():
 
 # ─── 3. Clustering: Player Segmentation ─────────────────────────────
 @app.route('/segments')
+@role_required('Federation', 'Sponsor', 'Admin')
 def segments_page():
     segments = {}
     for seg_name in ['Stars', 'Contenders', 'Regulars', 'Newcomers']:
@@ -754,6 +962,7 @@ def api_segment_player():
 
 # ─── 4. Recommendation: Equipment ───────────────────────────────────
 @app.route('/recommend')
+@role_required('Federation', 'Sponsor', 'Joueur', 'Admin')
 def recommend_page():
     return render_template('recommend.html', players=player_list)
 
@@ -812,6 +1021,7 @@ def api_recommend():
 
 # ─── 5. Anomaly: Emerging Talent ────────────────────────────────────
 @app.route('/talent')
+@role_required('Federation', 'Admin')
 def talent_page():
     if len(df_match_only) == 0:
         return render_template('talent.html', talents=[], total_anomalies_iso=0, total_anomalies_lof=0)
@@ -874,6 +1084,7 @@ def api_check_talent():
 
 # ─── 6. Time Series Forecast ─────────────────────────────────────────
 @app.route('/forecast')
+@role_required('Federation', 'Sponsor', 'Joueur', 'Admin')
 def forecast_page():
     return render_template('forecast.html', eligible_players=ts_eligible)
 
@@ -890,6 +1101,15 @@ def api_forecast():
     return jsonify(result)
 
 
+# ─── 7. Operations Dashboard (Admin only) ───────────────────────────
+@app.route('/operations')
+@role_required('Admin')
+def operations():
+    """System operations control panel — MLflow, Grafana, Prometheus."""
+    logger.info(f"Admin accessed operations panel: {session.get('username')}")
+    return render_template('operations.html')
+
+
 # ─── Search API ─────────────────────────────────────────────────────
 @app.route('/api/search-players')
 def search_players():
@@ -900,9 +1120,37 @@ def search_players():
     return jsonify(matches)
 
 
+# ─── Retrain API (synchronous - waits for completion) ────────────────
+@app.route('/api/retrain', methods=['POST'])
+def api_retrain():
+    import subprocess, time
+
+    env = os.environ.copy()
+    env['PYTHONIOENCODING'] = 'utf-8'
+    env['MPLBACKEND'] = 'Agg'
+
+    start = time.time()
+    try:
+        result = subprocess.run(
+            ['python', 'padel_ml_pipeline.py'],
+            cwd=BASE_DIR, capture_output=True, text=True,
+            timeout=1800, env=env, encoding='utf-8'
+        )
+        duration = round(time.time() - start, 1)
+        output_lines = result.stdout.strip().split('\n')
+        return jsonify({
+            'status': 'SUCCESS' if result.returncode == 0 else 'FAILED',
+            'duration_seconds': duration,
+            'summary': '\n'.join(output_lines[-30:]),
+            'errors': result.stderr[-500:] if result.stderr else None
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({'status': 'TIMEOUT', 'message': 'Pipeline took longer than 30 minutes'}), 504
+    except Exception as e:
+        return jsonify({'status': 'FAILED', 'error': str(e)}), 500
 # ═══════════════════════════════════════════════════════════════════════
 # RUN
 # ═══════════════════════════════════════════════════════════════════════
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+   app.run(debug=False, host='0.0.0.0', port=5000, threaded=True)

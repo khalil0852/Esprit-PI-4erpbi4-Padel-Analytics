@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Power BI Dashboard — Padel Analytics{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📊 Power BI Dashboard</h1>
+    <p>Premier Padel Analytics — Saison 2023-2025 · Joueurs & Staff · Sponsors & Équipement · Fédération</p>
+</div>
+
+<div class="grid grid-4" style="margin-bottom: 1.5rem;">
+    <div class="card">
+        <h3>Source</h3>
+        <div class="value" style="font-size: 1.2rem;">Power BI</div>
+        <div class="sub">Live embedded report</div>
+    </div>
+    <div class="card">
+        <h3>Pages</h3>
+        <div class="value" style="font-size: 1.2rem;">3 Spaces</div>
+        <div class="sub">Players · Sponsors · Federation</div>
+    </div>
+    <div class="card">
+        <h3>RLS</h3>
+        <div class="value" style="font-size: 1.2rem;">Enabled</div>
+        <div class="sub">Row-level security configured</div>
+    </div>
+    <div class="card">
+        <h3>Last Refresh</h3>
+        <div class="value" style="font-size: 1.2rem;">Live</div>
+        <div class="sub">Auto-sync from data warehouse</div>
+    </div>
+</div>
+
+<div class="card" style="padding: 0; overflow: hidden;">
+    <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+        <iframe
+            title="official_dashboard"
+            src="https://app.powerbi.com/reportEmbed?reportId=12345678-90ab-cdef-1234-567890abcdef&autoAuth=true&ctid=abcdef12-3456-7890-abcd-ef1234567890"
+            frameborder="0"
+            allowFullScreen="true"
+            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0;">
+        </iframe>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 1.5rem;">
+    <h3 style="margin-bottom: 1rem;">📌 Notes</h3>
+    <p style="color: var(--text2); font-size: 0.9rem; line-height: 1.6;">
+        The dashboard is embedded directly from Power BI Service with auto-authentication enabled.
+        On first load you may be prompted to sign in with your Microsoft account.
+        Row-Level Security is configured in the dataset to control data visibility per role.
+    </p>
+    <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <span class="tag tag-stars">RLS Enabled</span>
+        <span class="tag tag-contenders">Auto Auth</span>
+        <span class="tag tag-regulars">3 Workspaces</span>
+        <span class="tag tag-newcomers">Live Data</span>
+    </div>
+</div>
+{% endblock %}

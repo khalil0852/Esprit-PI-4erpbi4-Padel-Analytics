@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Access Denied — Padel Analytics{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>🚫 Access Denied</h1>
+    <p>You don't have permission to view this page.</p>
+</div>
+
+<div class="card" style="max-width: 600px;">
+    <h3 style="font-size: 1rem; margin-bottom: 1rem;">Your role:
+        {% if role == 'Federation' %}
+            <span style="color: var(--gold);">👑 {{ role }}</span>
+        {% elif role == 'Sponsor' %}
+            <span style="color: var(--accent2);">🏷️ {{ role }}</span>
+        {% else %}
+            <span style="color: var(--accent);">⚡ {{ role }}</span>
+        {% endif %}
+    </h3>
+    <p style="color: var(--text2); margin-bottom: 1.5rem; font-size: 0.9rem; line-height: 1.6;">
+        The page <code style="background: var(--bg3); padding: 0.2rem 0.5rem; border-radius: 4px; font-family: 'Space Mono', monospace;">{{ page }}</code>
+        is restricted by Row-Level Security policy. Your role grants access to specific models only.
+    </p>
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <a href="/" class="btn" style="text-decoration: none;">Back to Dashboard</a>
+        <a href="/logout" class="btn" style="background: var(--bg3); color: var(--text); text-decoration: none;">Sign Out</a>
+    </div>
+</div>
+{% endblock %}

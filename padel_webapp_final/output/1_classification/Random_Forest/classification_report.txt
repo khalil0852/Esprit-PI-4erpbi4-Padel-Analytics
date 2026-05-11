@@ -3,9 +3,9 @@ Best params: {'clf__max_depth': 10, 'clf__min_samples_split': 2, 'clf__n_estimat
 
               precision    recall  f1-score   support
 
-        Loss       0.86      0.86      0.86       410
-         Win       0.86      0.86      0.86       409
+        Loss       0.86      0.85      0.85       410
+         Win       0.85      0.86      0.85       409
 
-    accuracy                           0.86       819
-   macro avg       0.86      0.86      0.86       819
-weighted avg       0.86      0.86      0.86       819
+    accuracy                           0.85       819
+   macro avg       0.85      0.85      0.85       819
+weighted avg       0.85      0.85      0.85       819

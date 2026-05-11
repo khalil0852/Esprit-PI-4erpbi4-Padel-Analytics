@@ -1,2 +1,2 @@
-Silhouette: 0.4693
-Davies-Bouldin: 1.0179
+Silhouette: 0.4770
+Davies-Bouldin: 1.0407

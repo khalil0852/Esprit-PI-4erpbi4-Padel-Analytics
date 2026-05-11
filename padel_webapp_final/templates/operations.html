@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}Operations — Padel Analytics{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>⚙️ Operations</h1>
+    <p>System control panel — monitoring, model registry, and metrics</p>
+</div>
+
+{# ────────────────────────────────────────────────────────────────────
+   ADMIN BANNER
+   ──────────────────────────────────────────────────────────────────── #}
+<style>
+    .ops-banner {
+        padding: 1rem 1.25rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+        border-left: 4px solid #B388FF;
+        background: rgba(179, 136, 255, 0.1);
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .ops-launch-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    .ops-launch-card {
+        padding: 1.25rem;
+        border-radius: 10px;
+        background: var(--bg2);
+        border: 1px solid var(--border);
+        border-left: 4px solid;
+        text-decoration: none;
+        color: var(--text);
+        transition: transform 0.15s, box-shadow 0.15s;
+        display: block;
+    }
+    .ops-launch-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+    .ops-card-mlflow     { border-left-color: #0194E2; }
+    .ops-card-grafana    { border-left-color: #F46800; }
+    .ops-card-prometheus { border-left-color: #E6522C; }
+    .ops-card-airflow    { border-left-color: #017CEE; }
+    .ops-card-n8n        { border-left-color: #EA4B71; }
+    .ops-card-docker     { border-left-color: #2496ED; }
+
+    .ops-card-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+    .ops-card-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin: 0;
+    }
+    .ops-card-port {
+        font-family: 'Space Mono', monospace;
+        font-size: 0.85rem;
+        color: var(--text2);
+        margin: 0.25rem 0;
+    }
+    .ops-card-desc {
+        font-size: 0.85rem;
+        color: var(--text2);
+        margin: 0.5rem 0 0 0;
+    }
+    .ops-arrow {
+        margin-top: 0.5rem;
+        font-size: 0.9rem;
+        color: var(--accent);
+    }
+
+    .ops-section {
+        margin-top: 2rem;
+    }
+    .ops-section-title {
+        color: var(--text2);
+        font-size: 0.9rem;
+        letter-spacing: 0.1em;
+        margin-bottom: 0.75rem;
+    }
+
+    .iframe-card {
+        padding: 0;
+        overflow: hidden;
+        border-radius: 10px;
+        background: var(--bg2);
+        border: 1px solid var(--border);
+        margin-bottom: 1.5rem;
+    }
+    .iframe-card-header {
+        padding: 0.75rem 1.25rem;
+        background: var(--bg3);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .iframe-card-header h3 {
+        margin: 0;
+        font-size: 1rem;
+    }
+    .iframe-card-header a {
+        font-size: 0.85rem;
+        color: var(--accent);
+        text-decoration: none;
+    }
+    .iframe-card iframe {
+        width: 100%;
+        height: 600px;
+        border: 0;
+        display: block;
+    }
+</style>
+
+<div class="ops-banner">
+    <div style="font-size: 1.5rem;">🛠️</div>
+    <div style="flex: 1; min-width: 200px;">
+        <div style="font-weight: 700; color: #B388FF; font-size: 1rem;">Administrator View</div>
+        <div style="color: var(--text2); font-size: 0.9rem; margin-top: 0.25rem;">
+            Direct access to MLOps stack — model registry, monitoring, metrics, orchestration
+        </div>
+    </div>
+    <div class="tag tag-stars" style="white-space: nowrap; background: rgba(179, 136, 255, 0.2); color: #B388FF;">
+        Admin Access
+    </div>
+</div>
+
+{# ────────────────────────────────────────────────────────────────────
+   QUICK LAUNCH GRID — buttons for each ops tool
+   ──────────────────────────────────────────────────────────────────── #}
+<h3 class="ops-section-title">QUICK LAUNCH · OPS TOOLS</h3>
+
+<div class="ops-launch-grid">
+
+    <a href="http://localhost:5001" target="_blank" rel="noopener" class="ops-launch-card ops-card-mlflow">
+        <div class="ops-card-icon">🧪</div>
+        <div class="ops-card-title" style="color: #0194E2;">MLflow</div>
+        <div class="ops-card-port">localhost:5001</div>
+        <div class="ops-card-desc">Experiment tracking · Model Registry · 13 registered models · Champion/challenger</div>
+        <div class="ops-arrow">Open MLflow →</div>
+    </a>
+
+    <a href="http://localhost:3000" target="_blank" rel="noopener" class="ops-launch-card ops-card-grafana">
+        <div class="ops-card-icon">📊</div>
+        <div class="ops-card-title" style="color: #F46800;">Grafana</div>
+        <div class="ops-card-port">localhost:3000</div>
+        <div class="ops-card-desc">9-panel dashboard · Real-time visualizations · Drift detection · Alert firings</div>
+        <div class="ops-arrow">Open Grafana →</div>
+    </a>
+
+    <a href="http://localhost:9090" target="_blank" rel="noopener" class="ops-launch-card ops-card-prometheus">
+        <div class="ops-card-icon">🔥</div>
+        <div class="ops-card-title" style="color: #E6522C;">Prometheus</div>
+        <div class="ops-card-port">localhost:9090</div>
+        <div class="ops-card-desc">Metrics scraper · 20+ custom metrics · 4 alert rules · Time-series database</div>
+        <div class="ops-arrow">Open Prometheus →</div>
+    </a>
+
+    
+
+</div>
+
+
+
+{# ────────────────────────────────────────────────────────────────────
+   EMBEDDED PROMETHEUS
+   ──────────────────────────────────────────────────────────────────── #}
+<div class="ops-section">
+    <h3 class="ops-section-title">🔥 PROMETHEUS · METRICS & ALERTS</h3>
+    <div class="iframe-card">
+        <div class="iframe-card-header">
+            <h3 style="color: #E6522C;">Prometheus Query UI</h3>
+            <a href="http://localhost:9090" target="_blank" rel="noopener">Open in new tab ↗</a>
+        </div>
+        <iframe src="http://localhost:9090" title="Prometheus"></iframe>
+    </div>
+</div>
+
+<div style="margin-top: 2rem; padding: 1rem; background: rgba(255,255,255,0.03); border-radius: 6px; border-left: 3px solid var(--text3);">
+    <strong style="color: var(--text);">Note:</strong>
+    <span style="color: var(--text2); font-size: 0.9rem;">
+        If any embedded iframe shows blank, click "Open in new tab" above it.
+        Some tools (especially Grafana) block iframe embedding by default — open in a separate tab for full functionality.
+    </span>
+</div>
+{% endblock %}

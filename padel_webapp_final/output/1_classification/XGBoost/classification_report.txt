@@ -3,7 +3,7 @@ Best params: {'clf__colsample_bytree': 0.8, 'clf__learning_rate': 0.05, 'clf__ma
 
               precision    recall  f1-score   support
 
-        Loss       0.84      0.85      0.84       410
+        Loss       0.83      0.86      0.84       410
          Win       0.85      0.83      0.84       409
 
     accuracy                           0.84       819
